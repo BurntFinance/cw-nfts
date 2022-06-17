@@ -48,7 +48,7 @@ pub mod entry {
     use cw2981_royalties::{Cw2981Contract, InstantiateMsg};
     use cw2981_royalties::msg::Cw2981QueryMsg;
     use crate::error::ContractError;
-    use crate::execute::try_list;
+    use crate::execute::{try_buy, try_list};
     use crate::msg::{Cw721SellableExecuteMsg, Cw721SellableQueryMsg};
     use crate::query::listed_tokens;
 
@@ -86,6 +86,7 @@ pub mod entry {
     ) -> Result<Response, ContractError> {
         match msg {
             Cw721SellableExecuteMsg::List { listings } => try_list(deps, info, listings),
+            Cw721SellableExecuteMsg::Buy { limit } => try_buy(deps, info, limit),
             _ => Cw2981Contract::default().execute(deps, env, info, msg.into()),
         }
     }
