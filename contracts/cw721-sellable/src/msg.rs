@@ -6,6 +6,7 @@ use cw_storage_plus::Bound;
 use schemars::{JsonSchema, Map};
 use serde::{Deserialize, Serialize};
 use cw2981_royalties::MintMsg;
+use cw2981_royalties::msg::Cw2981QueryMsg;
 use cw721::Expiration;
 use cw721_base::state::TokenInfo;
 use crate::{Cw721SellableContract, Extension};
@@ -56,102 +57,135 @@ pub enum Cw721SellableExecuteMsg<T> {
     Buy { limit: Uint64 },
 }
 
-pub fn try_list(deps: DepsMut, info: MessageInfo, listings: Map<String, Uint64>) -> Result<Response, ContractError> {
-    let contract = Cw721SellableContract::default();
-    for (token_id, price) in listings.iter() {
-        check_can_send(deps.as_ref(), &env, &info, token_id)?;
-        contract.tokens.update(deps.storage, token_id, |old| {
-            let mut token_info = old.unwrap();
-            let mut meta = token_info.extension.unwrap();
-            meta.list_price = *price;
-            token_info.extension = Some(meta);
-            Ok(token_info)
-        })?;
-    }
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum Cw721SellableQueryMsg {
+    /// Returns all currently listed tokens
+    ListedTokens {
+        start_after: Option<String>,
+        limit: Option<u32>,
+    },
 
-    Ok(Response::new().add_attribute("method", "list"))
+    /// Should be called on sale to see if royalties are owed
+    /// by the marketplace selling the NFT, if CheckRoyalties
+    /// returns true
+    /// See https://eips.ethereum.org/EIPS/eip-2981
+    RoyaltyInfo {
+        token_id: String,
+        // the denom of this sale must also be the denom returned by RoyaltiesInfoResponse
+        // this was originally implemented as a Coin
+        // however that would mean you couldn't buy using CW20s
+        // as CW20 is just mapping of addr -> balance
+        sale_price: Uint128,
+    },
+    /// Called against contract to determine if this NFT
+    /// implements royalties. Should return a boolean as part of
+    /// CheckRoyaltiesResponse - default can simply be true
+    /// if royalties are implemented at token level
+    /// (i.e. always check on sale)
+    CheckRoyalties {},
+    /// Return the owner of the given token, error if token does not exist
+    /// Return type: OwnerOfResponse
+    OwnerOf {
+        token_id: String,
+        /// unset or false will filter out expired approvals, you must set to true to see them
+        include_expired: Option<bool>,
+    },
+    /// List all operators that can access all of the owner's tokens.
+    /// Return type: `OperatorsResponse`
+    AllOperators {
+        owner: String,
+        /// unset or false will filter out expired approvals, you must set to true to see them
+        include_expired: Option<bool>,
+        start_after: Option<String>,
+        limit: Option<u32>,
+    },
+    /// Total number of tokens issued
+    NumTokens {},
+
+    /// With MetaData Extension.
+    /// Returns top-level metadata about the contract: `ContractInfoResponse`
+    ContractInfo {},
+    /// With MetaData Extension.
+    /// Returns metadata about one particular token, based on *ERC721 Metadata JSON Schema*
+    /// but directly from the contract: `NftInfoResponse`
+    NftInfo { token_id: String },
+    /// With MetaData Extension.
+    /// Returns the result of both `NftInfo` and `OwnerOf` as one query as an optimization
+    /// for clients: `AllNftInfo`
+    AllNftInfo {
+        token_id: String,
+        /// unset or false will filter out expired approvals, you must set to true to see them
+        include_expired: Option<bool>,
+    },
+
+    /// With Enumerable extension.
+    /// Returns all tokens owned by the given address, [] if unset.
+    /// Return type: TokensResponse.
+    Tokens {
+        owner: String,
+        start_after: Option<String>,
+        limit: Option<u32>,
+    },
+    /// With Enumerable extension.
+    /// Requires pagination. Lists all token_ids controlled by the contract.
+    /// Return type: TokensResponse.
+    AllTokens {
+        start_after: Option<String>,
+        limit: Option<u32>,
+    },
 }
 
-pub fn try_buy(deps: DepsMut, info: MessageInfo, price: Uint64) -> Result<Response, ContractError> {
-    let coin = deps.querier.query_balance(info.sender, "burnt")?;
-    if coin.amount < price {
-        Err(ContractError::Unauthorized {})
-    }
-
-    let contract = Cw721SellableContract::default();
-
-    // todo: there might be a better way to do this than a scan
-    let mut lowest_price = Uint64::MAX;
-    let mut lowest_token_id = String;
-    let mut lowest_token_owner= Addr::unchecked("not-found");
-    let mut found = false; // in the case there are no listed tokens that meet the limit
-    let all: StdResult<(String, TokenInfo<Extension>)> = contract.tokens.range(deps.storage, None, None, Order::Ascending).collect();
-    for (id, info) in all {
-        let list_price = info.extension.unwrap().list_price;
-        if list_price < lowest_price {
-            found = true;
-            lowest_price = list_price;
-            lowest_token_id = id;
-            lowest_token_owner = info.owner;
-        }
-    };
-
-    if !found {
-        Err(ContractError::NoListedTokensError {})
-    }
-
-    contract.tokens.update(deps.storage, lowest_token_id, |old| {
-        let mut token_info = old.unwrap();
-        let mut meta = token_info.extension.unwrap();
-        meta.list_price = Uint64(0);
-        token_info.extension = Some(meta);
-        token_info.owner = info.sender.clone();
-        Ok(token_info)
-    })?;
-
-    let payment_coin = Coin::new(price.into(), "burnt");
-
-    Ok(Response::new().add_attribute("method", "buy")
-        .add_message(BankMsg::Send {
-            to_address: lowest_token_owner.to_string(),
-            amount: Vec::from(payment_coin)
-        }))
-}
-
-
-// todo: is there a way to use the cw721 base function here?
-pub fn check_can_send(
-    deps: Deps,
-    env: &Env,
-    info: &MessageInfo,
-    token_id: &String) -> Result<(), ContractError> {
-    let contract = Cw721SellableContract::default();
-    let token = contract.tokens.load(deps.storage, token_id)?;
-    if token.owner == info.sender {
-        return Ok(());
-    }
-
-    // any non-expired token approval can send
-    if token
-        .approvals
-        .iter()
-        .any(|apr| apr.spender == info.sender && !apr.is_expired(&env.block))
-    {
-        return Ok(());
-    }
-
-    // operator can send
-    let op = contract
-        .operators
-        .may_load(deps.storage, (&token.owner, &info.sender))?;
-    match op {
-        Some(ex) => {
-            if ex.is_expired(&env.block) {
-                Err(ContractError::Unauthorized {})
-            } else {
-                Ok(())
+impl From<Cw721SellableQueryMsg> for Cw2981QueryMsg {
+    fn from(msg: Cw721SellableQueryMsg) -> Cw2981QueryMsg {
+        match msg {
+            Cw721SellableQueryMsg::OwnerOf {
+                token_id,
+                include_expired,
+            } => Cw2981QueryMsg::OwnerOf {
+                token_id,
+                include_expired,
+            },
+            Cw721SellableQueryMsg::AllOperators {
+                owner,
+                include_expired,
+                start_after,
+                limit,
+            } => Cw2981QueryMsg::AllOperators {
+                owner,
+                include_expired,
+                start_after,
+                limit,
+            },
+            Cw721SellableQueryMsg::NumTokens {} => Cw2981QueryMsg::NumTokens {},
+            Cw721SellableQueryMsg::ContractInfo {} => Cw2981QueryMsg::ContractInfo {},
+            Cw721SellableQueryMsg::NftInfo { token_id } => Cw2981QueryMsg::NftInfo { token_id },
+            Cw721SellableQueryMsg::AllNftInfo {
+                token_id,
+                include_expired,
+            } => Cw2981QueryMsg::AllNftInfo {
+                token_id,
+                include_expired,
+            },
+            Cw721SellableQueryMsg::Tokens {
+                owner,
+                start_after,
+                limit,
+            } => Cw2981QueryMsg::Tokens {
+                owner,
+                start_after,
+                limit,
+            },
+            Cw721SellableQueryMsg::AllTokens { start_after, limit } => {
+                Cw2981QueryMsg::AllTokens { start_after, limit }
+            },
+            Cw721SellableQueryMsg::CheckRoyalties {} => {
+                Cw2981QueryMsg::CheckRoyalties {}
+            },
+            Cw721SellableQueryMsg::RoyaltyInfo { token_id, sale_price } => {
+                Cw2981QueryMsg::RoyaltyInfo { token_id, sale_price }
             }
+            _ => panic!("cannot covert {:?} to Cw2981QueryMsg", msg),
         }
-        None => Err(ContractError::Unauthorized {}),
     }
 }

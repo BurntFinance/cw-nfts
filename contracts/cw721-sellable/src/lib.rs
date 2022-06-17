@@ -1,5 +1,7 @@
 mod msg;
 mod error;
+mod execute;
+mod query;
 
 use cosmwasm_std::{Empty, Uint64};
 use cw2981_royalties::Trait;
@@ -40,12 +42,15 @@ pub type ExecuteMsg = Cw721SellableExecuteMsg<Extension>;
 pub mod entry {
     use super::*;
 
-    use cosmwasm_std::entry_point;
+    use cosmwasm_std::{entry_point, to_binary};
     use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
+    use schemars::_serde_json::to_string;
     use cw2981_royalties::{Cw2981Contract, InstantiateMsg};
     use cw2981_royalties::msg::Cw2981QueryMsg;
     use crate::error::ContractError;
-    use crate::msg::{Cw721SellableExecuteMsg, try_list};
+    use crate::execute::try_list;
+    use crate::msg::{Cw721SellableExecuteMsg, Cw721SellableQueryMsg};
+    use crate::query::listed_tokens;
 
     #[entry_point]
     pub fn instantiate(
@@ -59,12 +64,17 @@ pub mod entry {
 
     #[entry_point]
     pub fn query(
-        deps: DepsMut,
+        deps: Deps,
         env: Env,
-        info: MessageInfo,
-        msg: Cw2981QueryMsg,
-    ) -> StdResult<Response> {
-        Cw721SellableContract::default().instantiate(deps, env, info, msg)
+        msg: Cw721SellableQueryMsg,
+    ) -> StdResult<Binary> {
+        match msg {
+            Cw721SellableQueryMsg::ListedTokens {
+                limit,
+                start_after,
+            } => to_binary(&listed_tokens(deps, start_after, limit)?),
+            _ => Cw721SellableQueryMsg::default().query(deps, env, msg.into()),
+        }
     }
 
     #[entry_point]
