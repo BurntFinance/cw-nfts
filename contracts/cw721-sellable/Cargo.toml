@@ -1,0 +1,44 @@
+[package]
+name = "cw721-white-elephant"
+version = "0.1.0"
+edition = "2021"
+authors = [
+  "Ash <ash@burnt.com>",
+]
+description = "Example extending CW721 NFT with on-chain metadata to allow mint stealing"
+license = "Apache-2.0"
+repository = "https://github.com/BurntFinance/cw-nfts"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+exclude = [
+  # Those files are rust-optimizer artifacts. You might want to commit them for convenience but they should not be part of the source code publication.
+  "artifacts/*",
+]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# for more explicit tests, cargo test --features=backtraces
+backtraces = ["cosmwasm-std/backtraces"]
+# use library feature to disable all instantiate/execute/query exports
+library = []
+
+[dependencies]
+cw721 = { path = "../../packages/cw721", version = "0.13.2" }
+cw721-base = { path = "../cw721-base", version = "0.13.2", features = [
+  "library",
+] }
+cw2981-royalties = { path = "../cw2981-royalties", version = "0.13.2", features = [
+  "library",
+] }
+cosmwasm-std = { version = "1.0.0-beta8" }
+cw-storage-plus = "0.13.2"
+schemars = "0.8"
+serde = { version = "1.0.130", default-features = false, features = ["derive"] }
+thiserror = { version = "1.0.30" }
+
+[dev-dependencies]
+cosmwasm-schema = { version = "1.0.0-beta8" }

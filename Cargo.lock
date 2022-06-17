@@ -287,6 +287,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "cw721-white-elephant"
+version = "0.1.0"
+dependencies = [
+ "cosmwasm-schema",
+ "cosmwasm-std",
+ "cw-storage-plus",
+ "cw2981-royalties",
+ "cw721",
+ "cw721-base",
+ "schemars",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
 name = "der"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
