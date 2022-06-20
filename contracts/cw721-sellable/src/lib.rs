@@ -1,13 +1,14 @@
-mod msg;
 mod error;
 mod execute;
+mod msg;
 mod query;
 
+use crate::msg::Cw721SellableExecuteMsg;
 use cosmwasm_std::{Empty, Uint64};
 use cw2981_royalties::Trait;
-use crate::msg::Cw721SellableExecuteMsg;
 use cw721_base::Cw721Contract;
-
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 
 // see: https://docs.opensea.io/docs/metadata-standards
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug, Default)]
@@ -38,19 +39,17 @@ pub type MintExtension = Option<Extension>;
 pub type Cw721SellableContract<'a> = Cw721Contract<'a, Extension, Empty>;
 pub type ExecuteMsg = Cw721SellableExecuteMsg<Extension>;
 
-// #[cfg(not(feature = "library"))]
+#[cfg(not(feature = "library"))]
 pub mod entry {
     use super::*;
 
-    use cosmwasm_std::{entry_point, to_binary};
-    use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
-    use schemars::_serde_json::to_string;
-    use cw2981_royalties::{Cw2981Contract, InstantiateMsg};
-    use cw2981_royalties::msg::Cw2981QueryMsg;
     use crate::error::ContractError;
     use crate::execute::{try_buy, try_list};
     use crate::msg::{Cw721SellableExecuteMsg, Cw721SellableQueryMsg};
     use crate::query::listed_tokens;
+    use cosmwasm_std::{entry_point, to_binary};
+    use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
+    use cw2981_royalties::{Cw2981Contract, InstantiateMsg};
 
     #[entry_point]
     pub fn instantiate(
@@ -63,16 +62,11 @@ pub mod entry {
     }
 
     #[entry_point]
-    pub fn query(
-        deps: Deps,
-        env: Env,
-        msg: Cw721SellableQueryMsg,
-    ) -> StdResult<Binary> {
+    pub fn query(deps: Deps, env: Env, msg: Cw721SellableQueryMsg) -> StdResult<Binary> {
         match msg {
-            Cw721SellableQueryMsg::ListedTokens {
-                limit,
-                start_after,
-            } => to_binary(&listed_tokens(deps, start_after, limit)?),
+            Cw721SellableQueryMsg::ListedTokens { limit, start_after } => {
+                to_binary(&listed_tokens(deps, start_after, limit)?)
+            }
             _ => Cw721SellableQueryMsg::default().query(deps, env, msg.into()),
         }
     }
@@ -85,7 +79,7 @@ pub mod entry {
         msg: ExecuteMsg,
     ) -> Result<Response, ContractError> {
         match msg {
-            Cw721SellableExecuteMsg::List { listings } => try_list(deps, info, listings),
+            Cw721SellableExecuteMsg::List { listings } => try_list(deps, env, info, listings),
             Cw721SellableExecuteMsg::Buy { limit } => try_buy(deps, info, limit),
             _ => Cw2981Contract::default().execute(deps, env, info, msg.into()),
         }

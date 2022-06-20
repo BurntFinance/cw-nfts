@@ -1,8 +1,13 @@
-use cosmwasm_std::{Deps, Order, StdResult};
-use cw_storage_plus::Bound;
-use schemars::Map;
-use cw721_base::state::TokenInfo;
 use crate::{Cw721SellableContract, Extension};
+use cosmwasm_std::{Deps, Order, StdResult, Uint64};
+use cw721_base::state::TokenInfo;
+use cw_storage_plus::Bound;
+use schemars::JsonSchema;
+use schemars::Map;
+use serde::{Deserialize, Serialize};
+
+const DEFAULT_LIMIT: u32 = 500;
+const MAX_LIMIT: u32 = 10000;
 
 pub fn listed_tokens(
     deps: Deps,
@@ -16,13 +21,14 @@ pub fn listed_tokens(
 
     let token_map: Map<String, TokenInfo<Extension>> = Map::new();
 
-    for (id, info) in  contract
+    for result in contract
         .tokens
         .range(deps.storage, start, None, Order::Ascending)
-        .filter(|(key, info): (&String, &TokenInfo<Extension>)| info.extension.unwrap().list_price > 0 )
+        .filter(|result| result.unwrap().1.extension.unwrap().list_price > Uint64::zero())
         .take(limit)
-        .collect() {
-        token_map[id] = info;
+    {
+        let (id, info) = result.unwrap();
+        token_map.insert(id, info);
     }
 
     Ok(ListedTokensResponse { tokens: token_map })

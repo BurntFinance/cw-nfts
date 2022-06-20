@@ -1,16 +1,10 @@
-use std::cmp::min;
-use std::num::IntErrorKind::Empty;
-use cosmwasm_std::{Addr, BankMsg, BankQuery, Binary, Coin, Deps, DepsMut, Env, MessageInfo, Order, Response, StdResult, Uint128, Uint64};
-use cosmwasm_std::QueryRequest::Bank;
-use cw_storage_plus::Bound;
+use cosmwasm_std::{Binary, Uint128, Uint64};
 use schemars::{JsonSchema, Map};
 use serde::{Deserialize, Serialize};
-use cw2981_royalties::MintMsg;
+
 use cw2981_royalties::msg::Cw2981QueryMsg;
+use cw2981_royalties::MintMsg;
 use cw721::Expiration;
-use cw721_base::state::TokenInfo;
-use crate::{Cw721SellableContract, Extension};
-use crate::error::ContractError;
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -178,13 +172,15 @@ impl From<Cw721SellableQueryMsg> for Cw2981QueryMsg {
             },
             Cw721SellableQueryMsg::AllTokens { start_after, limit } => {
                 Cw2981QueryMsg::AllTokens { start_after, limit }
-            },
-            Cw721SellableQueryMsg::CheckRoyalties {} => {
-                Cw2981QueryMsg::CheckRoyalties {}
-            },
-            Cw721SellableQueryMsg::RoyaltyInfo { token_id, sale_price } => {
-                Cw2981QueryMsg::RoyaltyInfo { token_id, sale_price }
             }
+            Cw721SellableQueryMsg::CheckRoyalties {} => Cw2981QueryMsg::CheckRoyalties {},
+            Cw721SellableQueryMsg::RoyaltyInfo {
+                token_id,
+                sale_price,
+            } => Cw2981QueryMsg::RoyaltyInfo {
+                token_id,
+                sale_price,
+            },
             _ => panic!("cannot covert {:?} to Cw2981QueryMsg", msg),
         }
     }

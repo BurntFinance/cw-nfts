@@ -287,7 +287,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "cw721-white-elephant"
+name = "cw721-sellable"
 version = "0.1.0"
 dependencies = [
  "cosmwasm-schema",
