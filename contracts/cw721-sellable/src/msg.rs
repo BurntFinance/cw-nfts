@@ -2,6 +2,7 @@ use cosmwasm_std::{Binary, Uint128, Uint64};
 use schemars::{JsonSchema, Map};
 use serde::{Deserialize, Serialize};
 
+use crate::Extension;
 use cw2981_royalties::msg::Cw2981QueryMsg;
 use cw2981_royalties::MintMsg;
 use cw721::Expiration;
@@ -49,6 +50,53 @@ pub enum Cw721SellableExecuteMsg<T> {
 
     /// Purchases the cheapest listed NFT, below or at the limit
     Buy { limit: Uint64 },
+}
+
+type BaseExecuteMsg = cw721_base::ExecuteMsg<Extension>;
+
+impl From<Cw721SellableExecuteMsg<Extension>> for BaseExecuteMsg {
+    fn from(msg: Cw721SellableExecuteMsg<Extension>) -> BaseExecuteMsg {
+        match msg {
+            Cw721SellableExecuteMsg::TransferNft {
+                recipient,
+                token_id,
+            } => BaseExecuteMsg::TransferNft {
+                recipient,
+                token_id,
+            },
+            Cw721SellableExecuteMsg::SendNft {
+                contract,
+                token_id,
+                msg,
+            } => BaseExecuteMsg::SendNft {
+                contract,
+                token_id,
+                msg,
+            },
+            Cw721SellableExecuteMsg::Approve {
+                spender,
+                token_id,
+                expires,
+            } => BaseExecuteMsg::Approve {
+                spender,
+                token_id,
+                expires,
+            },
+            Cw721SellableExecuteMsg::Revoke { spender, token_id } => {
+                BaseExecuteMsg::Revoke { spender, token_id }
+            }
+            Cw721SellableExecuteMsg::ApproveAll { operator, expires } => {
+                BaseExecuteMsg::ApproveAll { operator, expires }
+            }
+            Cw721SellableExecuteMsg::RevokeAll { operator } => {
+                BaseExecuteMsg::RevokeAll { operator }
+            }
+            Cw721SellableExecuteMsg::Mint(mint_msg) => BaseExecuteMsg::Mint(mint_msg),
+            Cw721SellableExecuteMsg::Burn { token_id } => BaseExecuteMsg::Burn { token_id },
+
+            _ => panic!("cannot covert {:?} to Cw2981QueryMsg", msg),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]

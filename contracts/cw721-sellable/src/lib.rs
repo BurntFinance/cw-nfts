@@ -39,7 +39,7 @@ pub type MintExtension = Option<Extension>;
 pub type Cw721SellableContract<'a> = Cw721Contract<'a, Extension, Empty>;
 pub type ExecuteMsg = Cw721SellableExecuteMsg<Extension>;
 
-#[cfg(not(feature = "library"))]
+//#[cfg(not(feature = "library"))]
 pub mod entry {
     use super::*;
 
@@ -49,7 +49,7 @@ pub mod entry {
     use crate::query::listed_tokens;
     use cosmwasm_std::{entry_point, to_binary};
     use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
-    use cw2981_royalties::{Cw2981Contract, InstantiateMsg};
+    use cw2981_royalties::InstantiateMsg;
 
     #[entry_point]
     pub fn instantiate(
@@ -67,7 +67,7 @@ pub mod entry {
             Cw721SellableQueryMsg::ListedTokens { limit, start_after } => {
                 to_binary(&listed_tokens(deps, start_after, limit)?)
             }
-            _ => Cw721SellableQueryMsg::default().query(deps, env, msg.into()),
+            _ => Cw721SellableContract::default().query(deps, env, msg.into()),
         }
     }
 
@@ -81,7 +81,7 @@ pub mod entry {
         match msg {
             Cw721SellableExecuteMsg::List { listings } => try_list(deps, env, info, listings),
             Cw721SellableExecuteMsg::Buy { limit } => try_buy(deps, info, limit),
-            _ => Cw2981Contract::default().execute(deps, env, info, msg.into()),
+            _ => Cw721SellableContract::default().execute(deps, env, info, msg.into()),
         }
     }
 }
