@@ -67,7 +67,9 @@ pub mod entry {
             Cw721SellableQueryMsg::ListedTokens { limit, start_after } => {
                 to_binary(&listed_tokens(deps, start_after, limit)?)
             }
-            _ => Cw721SellableContract::default().query(deps, env, msg.into()),
+            _ => Cw721SellableContract::default()
+                .query(deps, env, msg.into())
+                .map_err(|e| e.into()),
         }
     }
 

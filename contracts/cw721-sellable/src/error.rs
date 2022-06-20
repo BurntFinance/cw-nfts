@@ -1,3 +1,4 @@
+use crate::error::ContractError::BaseError;
 use cosmwasm_std::StdError;
 use thiserror::Error;
 
@@ -13,7 +14,14 @@ pub enum ContractError {
     CustomError { val: String },
 
     #[error("No tokens listed for sale")]
-    NoListedTokensError {}
-    // Add any other custom errors you like here.
-    // Look at https://docs.rs/thiserror/1.0.21/thiserror/ for details.
+    NoListedTokensError {},
+
+    #[error("{0}")]
+    BaseError(cw721_base::ContractError),
+}
+
+impl From<cw721_base::ContractError> for ContractError {
+    fn from(err: cw721_base::ContractError) -> Self {
+        BaseError(err)
+    }
 }
