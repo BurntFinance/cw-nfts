@@ -100,7 +100,7 @@ where
             extension: msg.extension,
         };
         self.tokens
-            .update::<_, ContractError>(deps.storage, &msg.token_id, |old| match old {
+            .update(deps.storage, &msg.token_id, |old| match old {
                 Some(_) => Err(ContractError::Claimed {}),
                 None => Ok(token),
             })?;
