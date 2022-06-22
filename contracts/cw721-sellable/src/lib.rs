@@ -29,7 +29,7 @@ pub struct Metadata {
     /// as the minter addr
     /// question: how do we validate this?
     pub royalty_payment_address: Option<String>,
-    pub list_price: Uint64,
+    pub list_price: Option<Uint64>,
 }
 
 pub type Extension = Option<Metadata>;
@@ -39,7 +39,7 @@ pub type MintExtension = Option<Extension>;
 pub type Cw721SellableContract<'a> = Cw721Contract<'a, Extension, Empty>;
 pub type ExecuteMsg = Cw721SellableExecuteMsg<Extension>;
 
-//#[cfg(not(feature = "library"))]
+// #[cfg(not(feature = "library"))]
 pub mod entry {
     use super::*;
 
@@ -85,5 +85,22 @@ pub mod entry {
             Cw721SellableExecuteMsg::Buy { limit } => try_buy(deps, info, limit),
             _ => Cw721SellableContract::default().execute(deps, env, info, msg.into()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
+
+    const CREATOR: &str = "creator";
+
+    #[test]
+    fn use_sellable_extension() {
+        let mut deps = mock_dependencies();
+        let contract = Cw721SellableContract::default();
+
+        let info = mock_info(CREATOR, &[]);
     }
 }

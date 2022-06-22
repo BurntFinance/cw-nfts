@@ -16,17 +16,18 @@ pub fn try_buy(deps: DepsMut, info: MessageInfo, price: Uint64) -> Result<Respon
     let mut lowest_token_id = String::new();
     let mut lowest_token_owner = Addr::unchecked("not-found");
     let mut found = false; // in the case there are no listed tokens that meet the limit
-    for result in contract
+    for (id, info) in contract
         .tokens
         .range(deps.storage, None, None, Order::Ascending)
+        .flatten()
     {
-        let (id, info) = result.unwrap();
-        let list_price = info.extension.unwrap().list_price;
-        if (list_price < lowest_price) && (list_price > Uint64::zero()) {
-            found = true;
-            lowest_price = list_price;
-            lowest_token_id = id;
-            lowest_token_owner = info.owner;
+        if let Some(list_price) = info.extension.unwrap().list_price {
+            if (list_price < lowest_price) && (list_price > Uint64::zero()) {
+                found = true;
+                lowest_price = list_price;
+                lowest_token_id = id;
+                lowest_token_owner = info.owner;
+            }
         }
     }
 
@@ -39,7 +40,7 @@ pub fn try_buy(deps: DepsMut, info: MessageInfo, price: Uint64) -> Result<Respon
         .update::<_, ContractError>(deps.storage, lowest_token_id.as_str(), |old| {
             let mut token_info = old.unwrap();
             let mut meta = token_info.extension.unwrap();
-            meta.list_price = Uint64::zero();
+            meta.list_price = None;
             token_info.extension = Some(meta);
             token_info.owner = info.sender.clone();
             Ok(token_info)
@@ -69,7 +70,7 @@ pub fn try_list(
             .update::<_, ContractError>(deps.storage, token_id, |old| {
                 let mut token_info = old.unwrap();
                 let mut meta = token_info.extension.unwrap();
-                meta.list_price = *price;
+                meta.list_price = Some(*price);
                 token_info.extension = Some(meta);
                 Ok(token_info)
             })?;
