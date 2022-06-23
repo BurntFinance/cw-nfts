@@ -5,7 +5,6 @@ use cw_storage_plus::Bound;
 use schemars::JsonSchema;
 use schemars::Map;
 use serde::{Deserialize, Serialize};
-use std::borrow::{Borrow, BorrowMut};
 
 const DEFAULT_LIMIT: u32 = 500;
 const MAX_LIMIT: u32 = 10000;
