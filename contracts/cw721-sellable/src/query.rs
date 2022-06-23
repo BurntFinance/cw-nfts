@@ -1,3 +1,4 @@
+use std::ops::Deref;
 use crate::{Cw721SellableContract, Extension, Metadata};
 use cosmwasm_std::{Deps, Order, StdResult};
 use cw721_base::state::TokenInfo;
@@ -18,7 +19,6 @@ pub fn listed_tokens(
 
     let limit = limit.unwrap_or(DEFAULT_LIMIT).min(MAX_LIMIT) as usize;
     let start = start_after.map(|s| Bound::ExclusiveRaw(s.into()));
-
     let mut token_map: Map<String, TokenInfo<Extension>> = Map::new();
 
     contract
@@ -41,8 +41,8 @@ pub fn listed_tokens(
             _ => None,
         })
         .take(limit)
-        .for_each(|(id, pair)| {
-            token_map.insert(id.clone(), pair.clone());
+        .for_each(|(id, info)| {
+            token_map.insert(id.clone(), info.clone());
         });
 
     Ok(ListedTokensResponse { tokens: token_map })
