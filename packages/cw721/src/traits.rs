@@ -15,16 +15,18 @@ pub trait CustomMsg: Clone + std::fmt::Debug + PartialEq + JsonSchema {}
 
 impl CustomMsg for Empty {}
 
-pub trait Cw721<T, C>: Cw721Execute<T, C> + Cw721Query<T>
+pub trait Cw721<T, C, M>: Cw721Execute<T, C, M> + Cw721Query<T, M>
 where
     T: Serialize + DeserializeOwned + Clone,
+    M: Serialize + DeserializeOwned + Clone,
     C: CustomMsg,
 {
 }
 
-pub trait Cw721Execute<T, C>
+pub trait Cw721Execute<T, C, M>
 where
     T: Serialize + DeserializeOwned + Clone,
+    M: Serialize + DeserializeOwned + Clone,
     C: CustomMsg,
 {
     type Err: ToString;
@@ -93,9 +95,10 @@ where
     ) -> Result<Response<C>, Self::Err>;
 }
 
-pub trait Cw721Query<T>
+pub trait Cw721Query<T, M>
 where
     T: Serialize + DeserializeOwned + Clone,
+    M: Serialize + DeserializeOwned + Clone,
 {
     // TODO: use custom error?
     // How to handle the two derived error types?
