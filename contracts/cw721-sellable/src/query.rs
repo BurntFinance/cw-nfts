@@ -1,10 +1,11 @@
-use crate::{Cw721SellableContract, Extension};
+use crate::{Cw721SellableContract, Extension, Metadata};
 use cosmwasm_std::{Deps, Order, StdResult};
 use cw721_base::state::TokenInfo;
 use cw_storage_plus::Bound;
 use schemars::JsonSchema;
 use schemars::Map;
 use serde::{Deserialize, Serialize};
+use std::borrow::{Borrow, BorrowMut};
 
 const DEFAULT_LIMIT: u32 = 500;
 const MAX_LIMIT: u32 = 10000;
@@ -19,19 +20,30 @@ pub fn listed_tokens(
     let limit = limit.unwrap_or(DEFAULT_LIMIT).min(MAX_LIMIT) as usize;
     let start = start_after.map(|s| Bound::ExclusiveRaw(s.into()));
 
-    let token_map: Map<String, TokenInfo<Extension>> = Map::new();
+    let mut token_map: Map<String, TokenInfo<Extension>> = Map::new();
 
     contract
         .tokens
         .range(deps.storage, start, None, Order::Ascending)
-        .flat_map(|result| {
-            result
-                .ok()
-                .and_then(|pair @ (_, info)| info.extension.unwrap().list_price.map(|_| pair))
+        .flat_map(|result| match result {
+            Ok(
+                pair @ (
+                    _,
+                    TokenInfo {
+                        extension:
+                            Some(Metadata {
+                                list_price: Some(_),
+                                ..
+                            }),
+                        ..
+                    },
+                ),
+            ) => Some(pair),
+            _ => None,
         })
         .take(limit)
         .for_each(|(id, pair)| {
-            token_map.insert(id, pair);
+            token_map.insert(id.clone(), pair.clone());
         });
 
     Ok(ListedTokensResponse { tokens: token_map })

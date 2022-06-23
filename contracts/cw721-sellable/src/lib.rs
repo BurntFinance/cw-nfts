@@ -67,8 +67,8 @@ pub mod entry {
             Cw721SellableQueryMsg::ListedTokens { limit, start_after } => {
                 to_binary(&listed_tokens(deps, start_after, limit)?)
             }
-            _ => Cw721SellableContract::default()
-                .query(deps, env, msg.into())
+            Cw721SellableQueryMsg::Cw2981Query(cw2981_msg) => Cw721SellableContract::default()
+                .query(deps, env, cw2981_msg.into())
                 .map_err(|e| e.into()),
         }
     }
@@ -80,10 +80,15 @@ pub mod entry {
         info: MessageInfo,
         msg: ExecuteMsg,
     ) -> Result<Response, ContractError> {
+        use Cw721SellableExecuteMsg::*;
+
         match msg {
-            Cw721SellableExecuteMsg::List { listings } => try_list(deps, env, info, listings),
-            Cw721SellableExecuteMsg::Buy { limit } => try_buy(deps, info, limit),
-            _ => Cw721SellableContract::default().execute(deps, env, info, msg.into()),
+            List { listings } => try_list(deps, env, info, listings),
+            Buy { limit } => try_buy(deps, info, limit),
+            Delist { listings: _ } => Ok(Response::default()),
+            BaseMsg(base_msg) => Cw721SellableContract::default()
+                .execute(deps, env, info, base_msg)
+                .map_err(|x| x.into()),
         }
     }
 }

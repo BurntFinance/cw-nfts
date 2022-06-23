@@ -4,7 +4,7 @@ use cosmwasm_std::{Addr, BankMsg, Coin, Deps, DepsMut, Env, MessageInfo, Order, 
 use schemars::Map;
 
 pub fn try_buy(deps: DepsMut, info: MessageInfo, price: Uint64) -> Result<Response, ContractError> {
-    let coin = deps.querier.query_balance(info.sender, "burnt")?;
+    let coin = deps.querier.query_balance(&info.sender, "burnt")?;
     if coin.amount < price.into() {
         return Err(ContractError::Unauthorized {});
     }
