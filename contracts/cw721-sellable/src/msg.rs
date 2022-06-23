@@ -14,7 +14,7 @@ pub enum Cw721SellableExecuteMsg<T> {
 
     /// Lists the NFT at the given price
     List {
-        listings: Map<String, Uint64>,
+        listings: Vec<(String, Uint64)>,
     },
 
     /// Delists the NFT at the given price

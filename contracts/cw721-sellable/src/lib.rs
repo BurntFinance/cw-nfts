@@ -36,11 +36,12 @@ pub type Extension = Option<Metadata>;
 
 pub type MintExtension = Option<Extension>;
 
-pub type Cw721SellableContract<'a> = Cw721Contract<'a, Extension, Empty>;
+pub type Cw721SellableContract<'a> = Cw721Contract<'a, Extension, Empty, Empty>;
+
 pub type ExecuteMsg = Cw721SellableExecuteMsg<Extension>;
 
 // #[cfg(not(feature = "library"))]
-pub mod entry {
+mod entry {
     use super::*;
 
     use crate::error::ContractError;
@@ -96,7 +97,10 @@ pub mod entry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cosmwasm_std::from_binary;
 
+    use crate::msg::Cw721SellableQueryMsg;
+    use crate::query::ListedTokensResponse;
     use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
 
     const CREATOR: &str = "creator";
@@ -107,5 +111,40 @@ mod tests {
         let contract = Cw721SellableContract::default();
 
         let info = mock_info(CREATOR, &[]);
+        let init_msg = cw721_base::InstantiateMsg {
+            name: "SpaceShips".to_string(),
+            symbol: "SPACE".to_string(),
+            minter: CREATOR.to_string(),
+        };
+
+        contract
+            .instantiate(deps.as_mut(), mock_env(), info.clone(), init_msg)
+            .unwrap();
+
+        // Mint tokens
+        let token_ids = ["Enterprise", "Voyager"];
+        for token_id in token_ids {
+            let mint_msg = cw721_base::MintMsg {
+                token_id: token_id.to_string(),
+                owner: "john".to_string(),
+                token_uri: Some("https://starships.example.com/Starship/Enterprise.json".into()),
+                extension: Some(Metadata {
+                    description: Some("Spaceship with Warp Drive".into()),
+                    name: Some(format!("Starship USS {}", token_id).to_string()),
+                    ..Metadata::default()
+                }),
+            };
+            let exec_msg = ExecuteMsg::BaseMsg(cw721_base::ExecuteMsg::Mint(mint_msg.clone()));
+            entry::execute(deps.as_mut(), mock_env(), info.clone(), exec_msg).unwrap();
+        }
+
+        // Query saleable tokens
+        let query_msg = Cw721SellableQueryMsg::ListedTokens {
+            start_after: None,
+            limit: None,
+        };
+        let query_res: ListedTokensResponse =
+            from_binary(&entry::query(deps.as_ref(), mock_env(), query_msg).unwrap()).unwrap();
+        assert_eq!(0, query_res.tokens.len());
     }
 }
