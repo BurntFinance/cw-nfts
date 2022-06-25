@@ -3,9 +3,7 @@ use cosmwasm_std::{Deps, Order, StdResult};
 use cw721_base::state::TokenInfo;
 use cw_storage_plus::Bound;
 use schemars::JsonSchema;
-use schemars::Map;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 const DEFAULT_LIMIT: u32 = 500;
 const MAX_LIMIT: u32 = 10000;

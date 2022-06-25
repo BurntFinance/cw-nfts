@@ -60,7 +60,7 @@ pub fn try_list(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    listings: Vec<(String, Uint64)>,
+    listings: Map<String, Uint64>,
 ) -> Result<Response, ContractError> {
     let contract = Cw721SellableContract::default();
     for (token_id, price) in listings.iter() {

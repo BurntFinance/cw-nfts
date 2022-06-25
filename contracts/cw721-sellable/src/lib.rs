@@ -102,15 +102,17 @@ mod tests {
     use crate::msg::Cw721SellableQueryMsg;
     use crate::query::ListedTokensResponse;
     use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
+    use schemars::Map;
 
     const CREATOR: &str = "creator";
+    const OWNER: &str = "owner";
 
     #[test]
     fn use_sellable_extension() {
         let mut deps = mock_dependencies();
         let contract = Cw721SellableContract::default();
 
-        let info = mock_info(CREATOR, &[]);
+        let creator_info = mock_info(CREATOR, &[]);
         let init_msg = cw721_base::InstantiateMsg {
             name: "SpaceShips".to_string(),
             symbol: "SPACE".to_string(),
@@ -118,7 +120,7 @@ mod tests {
         };
 
         contract
-            .instantiate(deps.as_mut(), mock_env(), info.clone(), init_msg)
+            .instantiate(deps.as_mut(), mock_env(), creator_info.clone(), init_msg)
             .unwrap();
 
         // Mint tokens
@@ -126,7 +128,7 @@ mod tests {
         for token_id in token_ids {
             let mint_msg = cw721_base::MintMsg {
                 token_id: token_id.to_string(),
-                owner: "john".to_string(),
+                owner: OWNER.to_string(),
                 token_uri: Some("https://starships.example.com/Starship/Enterprise.json".into()),
                 extension: Some(Metadata {
                     description: Some("Spaceship with Warp Drive".into()),
@@ -135,7 +137,7 @@ mod tests {
                 }),
             };
             let exec_msg = ExecuteMsg::BaseMsg(cw721_base::ExecuteMsg::Mint(mint_msg.clone()));
-            entry::execute(deps.as_mut(), mock_env(), info.clone(), exec_msg).unwrap();
+            entry::execute(deps.as_mut(), mock_env(), creator_info.clone(), exec_msg).unwrap();
         }
 
         // Query saleable tokens
@@ -144,7 +146,36 @@ mod tests {
             limit: None,
         };
         let query_res: ListedTokensResponse =
-            from_binary(&entry::query(deps.as_ref(), mock_env(), query_msg).unwrap()).unwrap();
+            from_binary(&entry::query(deps.as_ref(), mock_env(), query_msg.clone()).unwrap())
+                .unwrap();
         assert_eq!(0, query_res.tokens.len());
+
+        let owner_info = mock_info(OWNER, &[]);
+        let list_msg = Cw721SellableExecuteMsg::List {
+            listings: Map::from([("Voyager".to_string(), Uint64::from(30 as u8))]),
+        };
+        let exec_res = entry::execute(deps.as_mut(), mock_env(), owner_info.clone(), list_msg);
+        exec_res.expect("expected list call to be successful");
+
+        let query_res: ListedTokensResponse =
+            from_binary(&entry::query(deps.as_ref(), mock_env(), query_msg.clone()).unwrap())
+                .unwrap();
+        assert_eq!(1, query_res.tokens.len());
+        let (listed_token_id, listed_token_info) = query_res.tokens.get(0).unwrap();
+        assert_eq!(
+            listed_token_info
+                .extension
+                .clone()
+                .unwrap()
+                .list_price
+                .unwrap(),
+            Uint64::from(30 as u8),
+            "listed token price did not match expectation"
+        );
+        assert_eq!(
+            *listed_token_id,
+            "Voyager".to_string(),
+            "listed token id did not match expectation"
+        );
     }
 }
