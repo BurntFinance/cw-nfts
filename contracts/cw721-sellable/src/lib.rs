@@ -2,6 +2,7 @@ mod error;
 mod execute;
 mod msg;
 mod query;
+mod test_utils;
 
 use crate::msg::Cw721SellableExecuteMsg;
 use cosmwasm_std::{Empty, Uint64};
@@ -96,7 +97,10 @@ mod entry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cosmwasm_std::{from_binary, Coin, MessageInfo, OwnedDeps, Response, StdResult};
+    use crate::test_utils::{Context, ContractInfo};
+    use cosmwasm_std::{
+        from_binary, Coin, MessageInfo, OwnedDeps, QuerierWrapper, Response, StdResult, Uint128,
+    };
 
     use crate::error::ContractError;
     use crate::msg::Cw721SellableQueryMsg;
@@ -111,70 +115,6 @@ mod tests {
     const OWNER: &str = "owner";
     const BUYER: &str = "buyer";
     const NO_MONEY: &str = "no_money";
-
-    struct Context<'a> {
-        pub deps: OwnedDeps<MockStorage, MockApi, MockQuerier>,
-        contract: Cw721SellableContract<'a>,
-        pub creator_info: MessageInfo,
-    }
-
-    struct ContractInfo {
-        pub name: String,
-        pub symbol: String,
-    }
-
-    impl Context<'_> {
-        pub fn new<'a>(contract_info: ContractInfo) -> Context<'a> {
-            let million_burnt = [Coin::new(1_000_000, "burnt")];
-            let zero_burnt = [Coin::new(0, "burnt")];
-            let mut deps = mock_dependencies_with_balances(&[
-                (CREATOR, &million_burnt),
-                (OWNER, &million_burnt),
-                (BUYER, &million_burnt),
-                (NO_MONEY, &zero_burnt),
-            ]);
-
-            let contract = Cw721SellableContract::default();
-            let creator_info = mock_info(CREATOR, &[]);
-            let init_msg = cw721_base::InstantiateMsg {
-                name: contract_info.name,
-                symbol: contract_info.symbol,
-                minter: CREATOR.to_string(),
-            };
-            contract
-                .instantiate(deps.as_mut(), mock_env(), creator_info.clone(), init_msg)
-                .unwrap();
-
-            Context {
-                deps,
-                contract,
-                creator_info,
-            }
-        }
-
-        pub fn execute(
-            &mut self,
-            info: Option<MessageInfo>,
-            msg: ExecuteMsg,
-        ) -> Result<Response, ContractError> {
-            let creator_info = info.unwrap_or(self.creator_info.clone());
-            entry::execute(self.deps.as_mut(), mock_env(), creator_info, msg)
-        }
-
-        pub fn query<T: DeserializeOwned>(&self, msg: Cw721SellableQueryMsg) -> StdResult<T> {
-            let binary_res = entry::query(self.deps.as_ref(), mock_env(), msg);
-            binary_res.and_then(|bin| from_binary(&bin))
-        }
-    }
-
-    impl Default for Context<'_> {
-        fn default() -> Self {
-            Context::new(ContractInfo {
-                name: "SpaceShips".into(),
-                symbol: "SPACE".into(),
-            })
-        }
-    }
 
     #[test]
     fn list_token() {
@@ -194,7 +134,8 @@ mod tests {
                 }),
             };
             let exec_msg = ExecuteMsg::BaseMsg(cw721_base::ExecuteMsg::Mint(mint_msg.clone()));
-            context.execute(None, exec_msg).unwrap();
+            let creator_info = mock_info(CREATOR, &[]);
+            context.execute(creator_info, exec_msg).unwrap();
         }
 
         // Query saleable tokens
@@ -209,7 +150,7 @@ mod tests {
         let list_msg = Cw721SellableExecuteMsg::List {
             listings: Map::from([("Voyager".to_string(), Uint64::from(30 as u8))]),
         };
-        let exec_res = context.execute(Some(owner_info.clone()), list_msg);
+        let exec_res = context.execute(owner_info.clone(), list_msg);
         exec_res.expect("expected list call to be successful");
 
         let query_res: ListedTokensResponse = context.query(query_msg.clone()).unwrap();
@@ -234,7 +175,22 @@ mod tests {
 
     #[test]
     fn buy_token() {
-        let mut context = Context::default();
+        let million_tokens = &[Coin::new(1_000_000, "burnt")];
+        let zero_tokens = &[Coin::new(0, "burnt")];
+        let balances: &[(&str, &[Coin])] = &[
+            (CREATOR, million_tokens),
+            (OWNER, million_tokens),
+            (BUYER, million_tokens),
+            (NO_MONEY, zero_tokens),
+        ];
+        let mut context = Context::new(
+            ContractInfo {
+                name: "SpaceShips".into(),
+                symbol: "SPACE".into(),
+            },
+            CREATOR,
+            Some(balances),
+        );
         // Mint tokens
         let token_ids = ["Enterprise", "Voyager"];
         for token_id in token_ids {
@@ -249,8 +205,9 @@ mod tests {
                 }),
             };
             let exec_msg = ExecuteMsg::BaseMsg(cw721_base::ExecuteMsg::Mint(mint_msg.clone()));
+            let creator_info = mock_info(CREATOR, &[]);
             context
-                .execute(None, exec_msg)
+                .execute(creator_info, exec_msg)
                 .expect("expected mint to succeed");
         }
 
@@ -260,7 +217,7 @@ mod tests {
             listings: Map::from([("Voyager".to_string(), Uint64::from(30 as u64))]),
         };
         context
-            .execute(Some(owner_info.clone()), list_msg)
+            .execute(owner_info.clone(), list_msg)
             .expect("expected list call to be successful");
 
         // Buy a token
@@ -270,15 +227,26 @@ mod tests {
         let buyer_info = mock_info(BUYER, &[]);
         let no_money_info = mock_info(NO_MONEY, &[]);
         context
-            .execute(Some(buyer_info.clone()), create_buy_msg(20))
+            .execute(buyer_info.clone(), create_buy_msg(20))
             .expect_err("expected buy below list price to fail");
 
         context
-            .execute(Some(no_money_info.clone()), create_buy_msg(30))
+            .execute(no_money_info.clone(), create_buy_msg(30))
             .expect_err("expected buy from user without funds to fail");
 
-        context
-            .execute(Some(buyer_info.clone()), create_buy_msg(30))
+        let resp = context
+            .execute(buyer_info.clone(), create_buy_msg(30))
             .expect("expected buy at list price to succeed");
+
+        // Check balance transfers
+        let owner_balance = context
+            .balance(OWNER)
+            .expect("expected to find buyer balance");
+        assert_eq!(owner_balance.amount, Uint128::new(1_000_030));
+
+        let buyer_balance = context
+            .balance(BUYER)
+            .expect("expected to find buyer balance");
+        assert_eq!(buyer_balance.amount, Uint128::new(9_999_970));
     }
 }
