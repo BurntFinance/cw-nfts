@@ -268,9 +268,14 @@ mod tests {
             limit: Uint64::new(limit),
         };
         let buyer_info = mock_info(BUYER, &[]);
+        let no_money_info = mock_info(NO_MONEY, &[]);
         context
             .execute(Some(buyer_info.clone()), create_buy_msg(20))
             .expect_err("expected buy below list price to fail");
+
+        context
+            .execute(Some(no_money_info.clone()), create_buy_msg(30))
+            .expect_err("expected buy from user without funds to fail");
 
         context
             .execute(Some(buyer_info.clone()), create_buy_msg(30))
