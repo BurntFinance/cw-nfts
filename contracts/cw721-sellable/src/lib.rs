@@ -101,7 +101,6 @@ mod tests {
     use super::*;
     use crate::test_utils::{Context, ContractInfo};
     use cosmwasm_std::{Addr, BankMsg, Coin, CosmosMsg};
-    
 
     use crate::msg::Cw721SellableQueryMsg;
     use crate::query::ListedTokensResponse;
@@ -150,7 +149,7 @@ mod tests {
         let exec_res = context.execute(owner_info.clone(), list_msg);
         exec_res.expect("expected list call to be successful");
 
-        let query_res: ListedTokensResponse = context.query(query_msg.clone()).unwrap();
+        let mut query_res: ListedTokensResponse = context.query(query_msg.clone()).unwrap();
         assert_eq!(1, query_res.tokens.len());
         let (listed_token_id, listed_token_info) = query_res.tokens.get(0).unwrap();
         assert_eq!(
@@ -168,6 +167,16 @@ mod tests {
             "Voyager".to_string(),
             "listed token id did not match expectation"
         );
+
+        let delist_msg = Cw721SellableExecuteMsg::List {
+            listings: Map::from([("Voyager".to_string(), Uint64::zero())]),
+        };
+        context
+            .execute(owner_info.clone(), delist_msg)
+            .expect("expected delist to be successful");
+
+        query_res = context.query(query_msg.clone()).unwrap();
+        assert_eq!(0, query_res.tokens.len());
     }
 
     #[test]
