@@ -86,7 +86,6 @@ mod entry {
         match msg {
             List { listings } => try_list(deps, env, info, listings),
             Buy { limit } => try_buy(deps, info, limit),
-            Delist { listings: _ } => Ok(Response::default()),
             BaseMsg(base_msg) => Cw721SellableContract::default()
                 .execute(deps, env, info, base_msg)
                 .map_err(|x| x.into()),

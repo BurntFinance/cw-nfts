@@ -1,6 +1,8 @@
 use crate::error::ContractError;
 use crate::Cw721SellableContract;
-use cosmwasm_std::{Addr, BankMsg, Coin, Deps, DepsMut, Env, MessageInfo, Order, Response, Uint64};
+use cosmwasm_std::{
+    Addr, BankMsg, Coin, Deps, DepsMut, Env, MessageInfo, Order, Response, StdError, Uint64,
+};
 use schemars::Map;
 
 pub fn try_buy(deps: DepsMut, info: MessageInfo, price: Uint64) -> Result<Response, ContractError> {
@@ -68,11 +70,18 @@ pub fn try_list(
         contract
             .tokens
             .update::<_, ContractError>(deps.storage, token_id, |old| {
-                let mut token_info = old.unwrap();
-                let mut meta = token_info.extension.unwrap();
-                meta.list_price = Some(*price);
-                token_info.extension = Some(meta);
-                Ok(token_info)
+                old.ok_or(StdError::not_found("SellableToken").into())
+                    .map(|mut old| {
+                        let opt_price = if (*price) > Uint64::new(0) {
+                            Some(*price)
+                        } else {
+                            None
+                        };
+                        let mut meta = old.extension.unwrap();
+                        meta.list_price = opt_price;
+                        old.extension = Some(meta);
+                        old
+                    })
             })?;
     }
 
@@ -102,17 +111,12 @@ pub fn check_can_send(
     }
 
     // operator can send
-    let op = contract
+    contract
         .operators
-        .may_load(deps.storage, (&token.owner, &info.sender))?;
-    match op {
-        Some(ex) => {
-            if ex.is_expired(&env.block) {
-                Err(ContractError::Unauthorized {})
-            } else {
-                Ok(())
-            }
-        }
-        None => Err(ContractError::Unauthorized {}),
-    }
+        .may_load(deps.storage, (&token.owner, &info.sender))
+        .map_err(|e| e.into())
+        .and_then(|opt_exp| match opt_exp {
+            Some(opt) if !opt.is_expired(&env.block) => Ok(()),
+            _ => Err(ContractError::Unauthorized {}),
+        })
 }

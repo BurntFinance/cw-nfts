@@ -17,11 +17,6 @@ pub enum Cw721SellableExecuteMsg<T> {
         listings: Map<String, Uint64>,
     },
 
-    /// Delists the NFT at the given price
-    Delist {
-        listings: Vec<String>,
-    },
-
     /// Purchases the cheapest listed NFT, below or at the limit
     Buy {
         limit: Uint64,
