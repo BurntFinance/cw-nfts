@@ -1,5 +1,4 @@
-use crate::error::ContractError::{BaseError, Std};
-use cosmwasm_std::StdError;
+use cosmwasm_std::{StdError, Uint64};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -10,11 +9,11 @@ pub enum ContractError {
     #[error("Unauthorized")]
     Unauthorized {},
 
-    #[error("Custom Error val: {val:?}")]
-    CustomError { val: String },
-
     #[error("No tokens listed for sale")]
     NoListedTokensError {},
+
+    #[error("Limit of {limit} below lowest offer of {lowest_price}")]
+    LimitBelowLowestOffer { limit: Uint64, lowest_price: Uint64 },
 
     #[error("{0}")]
     BaseError(#[from] cw721_base::ContractError),

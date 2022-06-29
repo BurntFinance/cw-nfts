@@ -1,61 +1,72 @@
 use crate::error::ContractError;
+use crate::error::ContractError::{LimitBelowLowestOffer, NoListedTokensError};
 use crate::Cw721SellableContract;
 use cosmwasm_std::{
     Addr, BankMsg, Coin, Deps, DepsMut, Env, MessageInfo, Order, Response, StdError, Uint64,
 };
 use schemars::Map;
 
-pub fn try_buy(deps: DepsMut, info: MessageInfo, price: Uint64) -> Result<Response, ContractError> {
+pub fn try_buy(deps: DepsMut, info: MessageInfo, limit: Uint64) -> Result<Response, ContractError> {
     let coin = deps.querier.query_balance(&info.sender, "burnt")?;
-    if coin.amount < price.into() {
+    if coin.amount < limit.into() {
         return Err(ContractError::Unauthorized {});
     }
 
     let contract = Cw721SellableContract::default();
 
     // todo: there might be a better way to do this than a scan
-    let mut lowest_price = Uint64::MAX;
-    let mut lowest_token_id = String::new();
-    let mut lowest_token_owner = Addr::unchecked("not-found");
-    let mut found = false; // in the case there are no listed tokens that meet the limit
+    let mut lowest: Result<(String, Addr, Uint64), ContractError> = Err(NoListedTokensError {});
     for (id, info) in contract
         .tokens
         .range(deps.storage, None, None, Order::Ascending)
         .flatten()
     {
-        if let Some(list_price) = info.extension.unwrap().list_price {
-            if (list_price < lowest_price) && (list_price > Uint64::zero()) {
-                found = true;
-                lowest_price = list_price;
-                lowest_token_id = id;
-                lowest_token_owner = info.owner;
+        let opt_price = info.extension.and_then(|meta| meta.list_price);
+        if let Some(list_price) = opt_price {
+            if let Ok((_, _, lowest_price)) = lowest {
+                if list_price < lowest_price {
+                    lowest = Ok((id, info.owner, list_price))
+                }
+            } else {
+                lowest = Ok((id, info.owner, list_price))
             }
         }
     }
 
-    if !found {
-        return Err(ContractError::NoListedTokensError {});
-    }
+    lowest
+        .and_then(|l @ (_, _, lowest_price)| {
+            if lowest_price <= limit {
+                Ok(l)
+            } else {
+                Err(LimitBelowLowestOffer {
+                    limit,
+                    lowest_price,
+                })
+            }
+        })
+        .and_then(|(lowest_token_id, lowest_token_owner, lowest_price)| {
+            contract.tokens.update::<_, ContractError>(
+                deps.storage,
+                lowest_token_id.as_str(),
+                |old| {
+                    let mut token_info = old.unwrap();
+                    let mut meta = token_info.extension.unwrap();
+                    meta.list_price = None;
+                    token_info.extension = Some(meta);
+                    token_info.owner = info.sender.clone();
+                    Ok(token_info)
+                },
+            )?;
 
-    contract
-        .tokens
-        .update::<_, ContractError>(deps.storage, lowest_token_id.as_str(), |old| {
-            let mut token_info = old.unwrap();
-            let mut meta = token_info.extension.unwrap();
-            meta.list_price = None;
-            token_info.extension = Some(meta);
-            token_info.owner = info.sender.clone();
-            Ok(token_info)
-        })?;
+            let payment_coin = Coin::new(limit.u64() as u128, "burnt");
 
-    let payment_coin = Coin::new(price.u64() as u128, "burnt");
-
-    Ok(Response::new()
-        .add_attribute("method", "buy")
-        .add_message(BankMsg::Send {
-            to_address: lowest_token_owner.to_string(),
-            amount: Vec::from([payment_coin]),
-        }))
+            Ok(Response::new()
+                .add_attribute("method", "buy")
+                .add_message(BankMsg::Send {
+                    to_address: lowest_token_owner.to_string(),
+                    amount: Vec::from([payment_coin]),
+                }))
+        })
 }
 
 pub fn try_list(

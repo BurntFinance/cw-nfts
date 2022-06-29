@@ -96,19 +96,21 @@ mod entry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cosmwasm_std::{from_binary, MessageInfo, OwnedDeps, Response, StdResult};
+    use cosmwasm_std::{from_binary, Coin, MessageInfo, OwnedDeps, Response, StdResult};
 
     use crate::error::ContractError;
     use crate::msg::Cw721SellableQueryMsg;
     use crate::query::ListedTokensResponse;
     use cosmwasm_std::testing::{
-        mock_dependencies, mock_env, mock_info, MockApi, MockQuerier, MockStorage,
+        mock_dependencies_with_balances, mock_env, mock_info, MockApi, MockQuerier, MockStorage,
     };
     use schemars::Map;
     use serde::de::DeserializeOwned;
 
     const CREATOR: &str = "creator";
     const OWNER: &str = "owner";
+    const BUYER: &str = "buyer";
+    const NO_MONEY: &str = "no_money";
 
     struct Context<'a> {
         pub deps: OwnedDeps<MockStorage, MockApi, MockQuerier>,
@@ -123,9 +125,16 @@ mod tests {
 
     impl Context<'_> {
         pub fn new<'a>(contract_info: ContractInfo) -> Context<'a> {
-            let mut deps = mock_dependencies();
-            let contract = Cw721SellableContract::default();
+            let million_burnt = [Coin::new(1_000_000, "burnt")];
+            let zero_burnt = [Coin::new(0, "burnt")];
+            let mut deps = mock_dependencies_with_balances(&[
+                (CREATOR, &million_burnt),
+                (OWNER, &million_burnt),
+                (BUYER, &million_burnt),
+                (NO_MONEY, &zero_burnt),
+            ]);
 
+            let contract = Cw721SellableContract::default();
             let creator_info = mock_info(CREATOR, &[]);
             let init_msg = cw721_base::InstantiateMsg {
                 name: contract_info.name,
@@ -221,5 +230,50 @@ mod tests {
             "Voyager".to_string(),
             "listed token id did not match expectation"
         );
+    }
+
+    #[test]
+    fn buy_token() {
+        let mut context = Context::default();
+        // Mint tokens
+        let token_ids = ["Enterprise", "Voyager"];
+        for token_id in token_ids {
+            let mint_msg = cw721_base::MintMsg {
+                token_id: token_id.to_string(),
+                owner: OWNER.to_string(),
+                token_uri: Some("https://starships.example.com/Starship/Enterprise.json".into()),
+                extension: Some(Metadata {
+                    description: Some("Spaceship with Warp Drive".into()),
+                    name: Some(format!("Starship USS {}", token_id).to_string()),
+                    ..Metadata::default()
+                }),
+            };
+            let exec_msg = ExecuteMsg::BaseMsg(cw721_base::ExecuteMsg::Mint(mint_msg.clone()));
+            context
+                .execute(None, exec_msg)
+                .expect("expected mint to succeed");
+        }
+
+        // List a token
+        let owner_info = mock_info(OWNER, &[]);
+        let list_msg = Cw721SellableExecuteMsg::List {
+            listings: Map::from([("Voyager".to_string(), Uint64::from(30 as u64))]),
+        };
+        context
+            .execute(Some(owner_info.clone()), list_msg)
+            .expect("expected list call to be successful");
+
+        // Buy a token
+        let create_buy_msg = |limit: u64| Cw721SellableExecuteMsg::Buy {
+            limit: Uint64::new(limit),
+        };
+        let buyer_info = mock_info(BUYER, &[]);
+        context
+            .execute(Some(buyer_info.clone()), create_buy_msg(20))
+            .expect_err("expected buy below list price to fail");
+
+        context
+            .execute(Some(buyer_info.clone()), create_buy_msg(30))
+            .expect("expected buy at list price to succeed");
     }
 }
