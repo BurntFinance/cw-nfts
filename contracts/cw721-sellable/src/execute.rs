@@ -9,13 +9,13 @@ use schemars::Map;
 pub fn try_buy(deps: DepsMut, info: MessageInfo, limit: Uint64) -> Result<Response, ContractError> {
     let coin = deps.querier.query_balance(&info.sender, "burnt")?;
     if coin.amount < limit.into() {
-        return Err(ContractError::Unauthorized {});
+        return Err(ContractError::Unauthorized);
     }
 
     let contract = Cw721SellableContract::default();
 
     // todo: there might be a better way to do this than a scan
-    let mut lowest: Result<(String, Addr, Uint64), ContractError> = Err(NoListedTokensError {});
+    let mut lowest: Result<(String, Addr, Uint64), ContractError> = Err(NoListedTokensError);
     for (id, info) in contract
         .tokens
         .range(deps.storage, None, None, Order::Ascending)
@@ -128,6 +128,6 @@ pub fn check_can_send(
         .map_err(|e| e.into())
         .and_then(|opt_exp| match opt_exp {
             Some(opt) if !opt.is_expired(&env.block) => Ok(()),
-            _ => Err(ContractError::Unauthorized {}),
+            _ => Err(ContractError::Unauthorized),
         })
 }

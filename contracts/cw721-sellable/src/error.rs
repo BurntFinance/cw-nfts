@@ -7,10 +7,10 @@ pub enum ContractError {
     Std(#[from] StdError),
 
     #[error("Unauthorized")]
-    Unauthorized {},
+    Unauthorized,
 
     #[error("No tokens listed for sale")]
-    NoListedTokensError {},
+    NoListedTokensError,
 
     #[error("Limit of {limit} below lowest offer of {lowest_price}")]
     LimitBelowLowestOffer { limit: Uint64, lowest_price: Uint64 },
