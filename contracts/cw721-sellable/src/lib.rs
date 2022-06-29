@@ -98,18 +98,12 @@ mod entry {
 mod tests {
     use super::*;
     use crate::test_utils::{Context, ContractInfo};
-    use cosmwasm_std::{
-        from_binary, Coin, MessageInfo, OwnedDeps, QuerierWrapper, Response, StdResult, Uint128,
-    };
+    use cosmwasm_std::{Coin, Uint128};
 
-    use crate::error::ContractError;
     use crate::msg::Cw721SellableQueryMsg;
     use crate::query::ListedTokensResponse;
-    use cosmwasm_std::testing::{
-        mock_dependencies_with_balances, mock_env, mock_info, MockApi, MockQuerier, MockStorage,
-    };
+    use cosmwasm_std::testing::mock_info;
     use schemars::Map;
-    use serde::de::DeserializeOwned;
 
     const CREATOR: &str = "creator";
     const OWNER: &str = "owner";
@@ -234,7 +228,7 @@ mod tests {
             .execute(no_money_info.clone(), create_buy_msg(30))
             .expect_err("expected buy from user without funds to fail");
 
-        let resp = context
+        context
             .execute(buyer_info.clone(), create_buy_msg(30))
             .expect("expected buy at list price to succeed");
 
