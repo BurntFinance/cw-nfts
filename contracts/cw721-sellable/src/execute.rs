@@ -6,6 +6,7 @@ use cosmwasm_std::{
 };
 use schemars::Map;
 
+
 pub fn try_buy(deps: DepsMut, info: MessageInfo, limit: Uint64) -> Result<Response, ContractError> {
     let coin = deps.querier.query_balance(&info.sender, "burnt")?;
     if coin.amount < limit.into() {
@@ -88,6 +89,7 @@ pub fn try_list(
                         } else {
                             None
                         };
+                        // TODO: get rid of this unwrap
                         let mut meta = old.extension.unwrap();
                         meta.list_price = opt_price;
                         old.extension = Some(meta);

@@ -6,7 +6,7 @@ use cosmwasm_std::testing::{
     MockStorage,
 };
 use cosmwasm_std::{
-    from_binary, Coin, Empty, MessageInfo, OwnedDeps, QuerierWrapper, Response, StdResult,
+    from_binary, Coin, MessageInfo, OwnedDeps, Response, StdResult,
 };
 use serde::de::DeserializeOwned;
 
@@ -57,11 +57,6 @@ impl Context<'_> {
     pub fn query<T: DeserializeOwned>(&self, msg: Cw721SellableQueryMsg) -> StdResult<T> {
         let binary_res = entry::query(self.deps.as_ref(), mock_env(), msg);
         binary_res.and_then(|bin| from_binary(&bin))
-    }
-
-    pub fn balance(&self, address: impl Into<String>) -> StdResult<Coin> {
-        let querier: QuerierWrapper<Empty> = QuerierWrapper::new(&self.deps.querier);
-        querier.query_balance(address, "burnt")
     }
 }
 

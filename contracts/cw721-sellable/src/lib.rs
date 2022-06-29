@@ -1,3 +1,5 @@
+extern crate core;
+
 mod error;
 mod execute;
 mod msg;
@@ -98,7 +100,7 @@ mod entry {
 mod tests {
     use super::*;
     use crate::test_utils::{Context, ContractInfo};
-    use cosmwasm_std::{Coin, Uint128};
+    use cosmwasm_std::{BankMsg, Coin, CosmosMsg};
 
     use crate::msg::Cw721SellableQueryMsg;
     use crate::query::ListedTokensResponse;
@@ -228,19 +230,25 @@ mod tests {
             .execute(no_money_info.clone(), create_buy_msg(30))
             .expect_err("expected buy from user without funds to fail");
 
-        context
+        let response = context
             .execute(buyer_info.clone(), create_buy_msg(30))
             .expect("expected buy at list price to succeed");
 
-        // Check balance transfers
-        let owner_balance = context
-            .balance(OWNER)
-            .expect("expected to find buyer balance");
-        assert_eq!(owner_balance.amount, Uint128::new(1_000_030));
+        assert_eq!(
+            response.messages.len(),
+            1,
+            "expected one message in response"
+        );
 
-        let buyer_balance = context
-            .balance(BUYER)
-            .expect("expected to find buyer balance");
-        assert_eq!(buyer_balance.amount, Uint128::new(9_999_970));
+        let message = &response.messages.get(0).unwrap().msg;
+        match message {
+            CosmosMsg::Bank(BankMsg::Send { to_address, amount })
+                if to_address.eq(OWNER)
+                    && amount == &Vec::from([Coin::new(30 as u128, "burnt")]) =>
+            {
+                assert!(true)
+            }
+            _ => assert!(false),
+        }
     }
 }
