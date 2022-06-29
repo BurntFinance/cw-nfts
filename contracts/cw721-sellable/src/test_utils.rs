@@ -5,14 +5,12 @@ use cosmwasm_std::testing::{
     mock_dependencies, mock_dependencies_with_balances, mock_env, mock_info, MockApi, MockQuerier,
     MockStorage,
 };
-use cosmwasm_std::{
-    from_binary, Coin, MessageInfo, OwnedDeps, Response, StdResult,
-};
+use cosmwasm_std::{from_binary, Coin, MessageInfo, OwnedDeps, Response, StdResult};
 use serde::de::DeserializeOwned;
 
 pub struct Context<'a> {
     pub deps: OwnedDeps<MockStorage, MockApi, MockQuerier>,
-    contract: Cw721SellableContract<'a>,
+    pub contract: Cw721SellableContract<'a>,
 }
 
 pub struct ContractInfo {
