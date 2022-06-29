@@ -48,8 +48,7 @@ mod entry {
     use crate::execute::{try_buy, try_list};
     use crate::msg::{Cw721SellableExecuteMsg, Cw721SellableQueryMsg};
     use crate::query::listed_tokens;
-    use cosmwasm_std::testing::MockStorage;
-    use cosmwasm_std::{entry_point, to_binary, OwnedDeps};
+    use cosmwasm_std::{entry_point, to_binary};
     use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
     use cw2981_royalties::InstantiateMsg;
 
@@ -98,7 +97,7 @@ mod entry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cosmwasm_std::{from_binary, DepsMut, MessageInfo, OwnedDeps, Response, StdResult};
+    use cosmwasm_std::{from_binary, MessageInfo, OwnedDeps, Response, StdResult};
 
     use crate::error::ContractError;
     use crate::msg::Cw721SellableQueryMsg;
@@ -114,7 +113,8 @@ mod tests {
 
     struct Context<'a> {
         pub deps: OwnedDeps<MockStorage, MockApi, MockQuerier>,
-        pub contract: Cw721SellableContract<'a>,
+        contract: Cw721SellableContract<'a>,
+        pub creator_info: MessageInfo,
     }
 
     struct ContractInfo {
@@ -137,15 +137,20 @@ mod tests {
                 .instantiate(deps.as_mut(), mock_env(), creator_info.clone(), init_msg)
                 .unwrap();
 
-            Context { deps, contract }
+            Context {
+                deps,
+                contract,
+                creator_info,
+            }
         }
 
         pub fn execute(
             &mut self,
-            info: MessageInfo,
+            info: Option<MessageInfo>,
             msg: ExecuteMsg,
         ) -> Result<Response, ContractError> {
-            entry::execute(self.deps.as_mut(), mock_env(), info, msg)
+            let creator_info = info.unwrap_or(self.creator_info.clone());
+            entry::execute(self.deps.as_mut(), mock_env(), creator_info, msg)
         }
 
         pub fn query<T: DeserializeOwned>(&self, msg: Cw721SellableQueryMsg) -> StdResult<T> {
@@ -165,19 +170,7 @@ mod tests {
 
     #[test]
     fn list_token() {
-        let mut deps = mock_dependencies();
-        let contract = Cw721SellableContract::default();
-
-        let creator_info = mock_info(CREATOR, &[]);
-        let init_msg = cw721_base::InstantiateMsg {
-            name: "SpaceShips".to_string(),
-            symbol: "SPACE".to_string(),
-            minter: CREATOR.to_string(),
-        };
-
-        contract
-            .instantiate(deps.as_mut(), mock_env(), creator_info.clone(), init_msg)
-            .unwrap();
+        let mut context = Context::default();
 
         // Mint tokens
         let token_ids = ["Enterprise", "Voyager"];
@@ -193,7 +186,7 @@ mod tests {
                 }),
             };
             let exec_msg = ExecuteMsg::BaseMsg(cw721_base::ExecuteMsg::Mint(mint_msg.clone()));
-            entry::execute(deps.as_mut(), mock_env(), creator_info.clone(), exec_msg).unwrap();
+            context.execute(None, exec_msg).unwrap();
         }
 
         // Query saleable tokens
@@ -201,21 +194,17 @@ mod tests {
             start_after: None,
             limit: None,
         };
-        let query_res: ListedTokensResponse =
-            from_binary(&entry::query(deps.as_ref(), mock_env(), query_msg.clone()).unwrap())
-                .unwrap();
+        let query_res: ListedTokensResponse = context.query(query_msg.clone()).unwrap();
         assert_eq!(0, query_res.tokens.len());
 
         let owner_info = mock_info(OWNER, &[]);
         let list_msg = Cw721SellableExecuteMsg::List {
             listings: Map::from([("Voyager".to_string(), Uint64::from(30 as u8))]),
         };
-        let exec_res = entry::execute(deps.as_mut(), mock_env(), owner_info.clone(), list_msg);
+        let exec_res = context.execute(Some(owner_info.clone()), list_msg);
         exec_res.expect("expected list call to be successful");
 
-        let query_res: ListedTokensResponse =
-            from_binary(&entry::query(deps.as_ref(), mock_env(), query_msg.clone()).unwrap())
-                .unwrap();
+        let query_res: ListedTokensResponse = context.query(query_msg.clone()).unwrap();
         assert_eq!(1, query_res.tokens.len());
         let (listed_token_id, listed_token_info) = query_res.tokens.get(0).unwrap();
         assert_eq!(
