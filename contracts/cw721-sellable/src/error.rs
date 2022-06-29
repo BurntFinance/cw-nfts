@@ -1,4 +1,4 @@
-use crate::error::ContractError::BaseError;
+use crate::error::ContractError::{BaseError, Std};
 use cosmwasm_std::StdError;
 use thiserror::Error;
 
@@ -17,11 +17,5 @@ pub enum ContractError {
     NoListedTokensError {},
 
     #[error("{0}")]
-    BaseError(cw721_base::ContractError),
-}
-
-impl From<cw721_base::ContractError> for ContractError {
-    fn from(err: cw721_base::ContractError) -> Self {
-        BaseError(err)
-    }
+    BaseError(#[from] cw721_base::ContractError),
 }
