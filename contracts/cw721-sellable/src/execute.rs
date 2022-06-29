@@ -58,7 +58,7 @@ pub fn try_buy(deps: DepsMut, info: MessageInfo, limit: Uint64) -> Result<Respon
                 },
             )?;
 
-            let payment_coin = Coin::new(limit.u64() as u128, "burnt");
+            let payment_coin = Coin::new(lowest_price.u64() as u128, "burnt");
 
             Ok(Response::new()
                 .add_attribute("method", "buy")
