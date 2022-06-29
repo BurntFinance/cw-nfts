@@ -48,7 +48,8 @@ mod entry {
     use crate::execute::{try_buy, try_list};
     use crate::msg::{Cw721SellableExecuteMsg, Cw721SellableQueryMsg};
     use crate::query::listed_tokens;
-    use cosmwasm_std::{entry_point, to_binary};
+    use cosmwasm_std::testing::MockStorage;
+    use cosmwasm_std::{entry_point, to_binary, OwnedDeps};
     use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
     use cw2981_royalties::InstantiateMsg;
 
@@ -97,18 +98,73 @@ mod entry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cosmwasm_std::from_binary;
+    use cosmwasm_std::{from_binary, DepsMut, MessageInfo, OwnedDeps, Response, StdResult};
 
+    use crate::error::ContractError;
     use crate::msg::Cw721SellableQueryMsg;
     use crate::query::ListedTokensResponse;
-    use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
+    use cosmwasm_std::testing::{
+        mock_dependencies, mock_env, mock_info, MockApi, MockQuerier, MockStorage,
+    };
     use schemars::Map;
+    use serde::de::DeserializeOwned;
 
     const CREATOR: &str = "creator";
     const OWNER: &str = "owner";
 
+    struct Context<'a> {
+        pub deps: OwnedDeps<MockStorage, MockApi, MockQuerier>,
+        pub contract: Cw721SellableContract<'a>,
+    }
+
+    struct ContractInfo {
+        pub name: String,
+        pub symbol: String,
+    }
+
+    impl Context<'_> {
+        pub fn new<'a>(contract_info: ContractInfo) -> Context<'a> {
+            let mut deps = mock_dependencies();
+            let contract = Cw721SellableContract::default();
+
+            let creator_info = mock_info(CREATOR, &[]);
+            let init_msg = cw721_base::InstantiateMsg {
+                name: contract_info.name,
+                symbol: contract_info.symbol,
+                minter: CREATOR.to_string(),
+            };
+            contract
+                .instantiate(deps.as_mut(), mock_env(), creator_info.clone(), init_msg)
+                .unwrap();
+
+            Context { deps, contract }
+        }
+
+        pub fn execute(
+            &mut self,
+            info: MessageInfo,
+            msg: ExecuteMsg,
+        ) -> Result<Response, ContractError> {
+            entry::execute(self.deps.as_mut(), mock_env(), info, msg)
+        }
+
+        pub fn query<T: DeserializeOwned>(&self, msg: Cw721SellableQueryMsg) -> StdResult<T> {
+            let binary_res = entry::query(self.deps.as_ref(), mock_env(), msg);
+            binary_res.and_then(|bin| from_binary(&bin))
+        }
+    }
+
+    impl Default for Context<'_> {
+        fn default() -> Self {
+            Context::new(ContractInfo {
+                name: "SpaceShips".into(),
+                symbol: "SPACE".into(),
+            })
+        }
+    }
+
     #[test]
-    fn use_sellable_extension() {
+    fn list_token() {
         let mut deps = mock_dependencies();
         let contract = Cw721SellableContract::default();
 
