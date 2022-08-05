@@ -17,9 +17,10 @@ use crate::state::{Approval, Cw721Contract, TokenInfo};
 const DEFAULT_LIMIT: u32 = 10;
 const MAX_LIMIT: u32 = 30;
 
-impl<'a, T, C> Cw721Query<T> for Cw721Contract<'a, T, C>
+impl<'a, T, C, M> Cw721Query<T, M> for Cw721Contract<'a, T, C, M>
 where
     T: Serialize + DeserializeOwned + Clone,
+    M: Serialize + DeserializeOwned + Clone,
     C: CustomMsg,
 {
     fn contract_info(&self, deps: Deps) -> StdResult<ContractInfoResponse> {
@@ -160,6 +161,7 @@ where
             .prefix(owner_addr)
             .keys(deps.storage, start, None, Order::Ascending)
             .take(limit)
+            .map(|x| x.map(|addr| addr.to_string()))
             .collect::<StdResult<Vec<_>>>()?;
 
         Ok(TokensResponse { tokens })
@@ -205,9 +207,10 @@ where
     }
 }
 
-impl<'a, T, C> Cw721Contract<'a, T, C>
+impl<'a, T, C, M> Cw721Contract<'a, T, C, M>
 where
     T: Serialize + DeserializeOwned + Clone,
+    M: Serialize + DeserializeOwned + Clone,
     C: CustomMsg,
 {
     pub fn minter(&self, deps: Deps) -> StdResult<MinterResponse> {

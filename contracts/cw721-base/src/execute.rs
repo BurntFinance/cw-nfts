@@ -14,9 +14,10 @@ use crate::state::{Approval, Cw721Contract, TokenInfo};
 const CONTRACT_NAME: &str = "crates.io:cw721-base";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-impl<'a, T, C> Cw721Contract<'a, T, C>
+impl<'a, T, C, M> Cw721Contract<'a, T, C, M>
 where
     T: Serialize + DeserializeOwned + Clone,
+    M: Serialize + DeserializeOwned + Clone,
     C: CustomMsg,
 {
     pub fn instantiate(
@@ -74,9 +75,10 @@ where
 }
 
 // TODO pull this into some sort of trait extension??
-impl<'a, T, C> Cw721Contract<'a, T, C>
+impl<'a, T, C, M> Cw721Contract<'a, T, C, M>
 where
     T: Serialize + DeserializeOwned + Clone,
+    M: Serialize + DeserializeOwned + Clone,
     C: CustomMsg,
 {
     pub fn mint(
@@ -115,9 +117,10 @@ where
     }
 }
 
-impl<'a, T, C> Cw721Execute<T, C> for Cw721Contract<'a, T, C>
+impl<'a, T, C, M> Cw721Execute<T, C, M> for Cw721Contract<'a, T, C, M>
 where
     T: Serialize + DeserializeOwned + Clone,
+    M: Serialize + DeserializeOwned + Clone,
     C: CustomMsg,
 {
     type Err = ContractError;
@@ -264,9 +267,10 @@ where
 }
 
 // helpers
-impl<'a, T, C> Cw721Contract<'a, T, C>
+impl<'a, T, C, M> Cw721Contract<'a, T, C, M>
 where
     T: Serialize + DeserializeOwned + Clone,
+    M: Serialize + DeserializeOwned + Clone,
     C: CustomMsg,
 {
     pub fn _transfer_nft(

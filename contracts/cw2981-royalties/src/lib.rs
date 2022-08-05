@@ -1,13 +1,11 @@
 pub mod msg;
 pub mod query;
 
-use cosmwasm_std::to_binary;
 pub use query::{check_royalties, query_royalties_info};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::msg::Cw2981QueryMsg;
 use cosmwasm_std::Empty;
 use cw721_base::Cw721Contract;
 pub use cw721_base::{ContractError, InstantiateMsg, MintMsg, MinterResponse};
@@ -44,7 +42,7 @@ pub type Extension = Option<Metadata>;
 
 pub type MintExtension = Option<Extension>;
 
-pub type Cw2981Contract<'a> = Cw721Contract<'a, Extension, Empty>;
+pub type Cw2981Contract<'a> = Cw721Contract<'a, Extension, Empty, Empty>;
 pub type ExecuteMsg = cw721_base::ExecuteMsg<Extension>;
 
 #[cfg(not(feature = "library"))]
