@@ -15,6 +15,9 @@ pub enum ContractError {
     #[error("Locked")]
     Locked,
 
+    #[error("NoMetadataPresent")]
+    NoMetadataPresent,
+
     #[error("No tokens listed for sale")]
     NoListedTokensError,
 
