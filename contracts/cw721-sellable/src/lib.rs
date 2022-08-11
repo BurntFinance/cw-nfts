@@ -91,7 +91,7 @@ mod entry {
         match msg {
             List { listings } => try_list(deps, env, info, listings),
             Buy { limit } => try_buy(deps, info, limit),
-            RedeemTicket { address, ticket_id } => try_redeem(deps, env, info, address, &ticket_id),
+            RedeemTicket { address, ticket_id } => try_redeem(deps, info, address, &ticket_id),
             BaseMsg(base_msg) => Cw721SellableContract::default()
                 .execute(deps, env, info, base_msg)
                 .map_err(|x| x.into()),
@@ -109,7 +109,7 @@ mod tests {
     
     use crate::msg::Cw721SellableQueryMsg;
     use crate::query::ListedTokensResponse;
-    use cosmwasm_std::testing::{mock_info, mock_dependencies, mock_env};
+    use cosmwasm_std::testing::{mock_info};
     use schemars::Map;
     use cw2981_royalties::InstantiateMsg;
     use cw2981_royalties::msg::{Cw2981QueryMsg};

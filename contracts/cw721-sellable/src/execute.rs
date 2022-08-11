@@ -103,7 +103,6 @@ pub fn try_list(
 
 pub fn try_redeem(
     deps: DepsMut,
-    env: Env,
     info: MessageInfo,
     address: String,
     ticket_id: &String
