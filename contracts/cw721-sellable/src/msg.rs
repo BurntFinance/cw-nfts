@@ -21,6 +21,12 @@ pub enum Cw721SellableExecuteMsg<T> {
     Buy {
         limit: Uint64,
     },
+
+    /// Mark ticket has redeemed
+    RedeemTicket {
+        address: String,
+        ticket_id: String
+    }
 }
 
 type BaseExecuteMsg = cw721_base::ExecuteMsg<Extension>;
