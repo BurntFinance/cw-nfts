@@ -34,7 +34,7 @@ pub struct Metadata {
     pub royalty_payment_address: Option<String>,
     pub list_price: Option<Uint64>,
     pub locked: Option<bool>,
-    pub redeemed: Option<bool>
+    pub redeemed: Option<bool>,
 }
 
 pub type Extension = Option<Metadata>;
@@ -102,19 +102,19 @@ mod entry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::test_utils::{Context, ContractInfo};
-    use cosmwasm_std::{Addr, BankMsg, Coin, CosmosMsg};
     use crate::entry::{execute, instantiate, query};
     use crate::error::ContractError;
-    
+    use crate::test_utils::test_utils::{Context, ContractInfo};
+    use cosmwasm_std::{Addr, BankMsg, Coin, CosmosMsg};
+
     use crate::msg::Cw721SellableQueryMsg;
     use crate::query::ListedTokensResponse;
-    use cosmwasm_std::testing::{mock_info};
-    use schemars::Map;
+    use cosmwasm_std::testing::mock_info;
+    use cw2981_royalties::msg::Cw2981QueryMsg;
     use cw2981_royalties::InstantiateMsg;
-    use cw2981_royalties::msg::{Cw2981QueryMsg};
-    use cw721::{NftInfoResponse};
     use cw721::Cw721Query;
+    use cw721::NftInfoResponse;
+    use schemars::Map;
 
     const CREATOR: &str = "creator";
     const OWNER: &str = "owner";
@@ -363,15 +363,15 @@ mod tests {
             ContractInfo {
                 name: "Ticketing".to_string(),
                 symbol: "TICK".to_string(),
-            }, 
+            },
             CREATOR,
-            Some(&[])
+            Some(&[]),
         );
 
         // Make sure only the owner of the contract can call method
         let msg = Cw721SellableExecuteMsg::RedeemTicket {
             address: String::from(OWNER),
-            ticket_id: String::from("OWNER_TICKET")
+            ticket_id: String::from("OWNER_TICKET"),
         };
         let exec_res = context.execute(mock_info(OWNER, &[]), msg).err();
         match exec_res {
@@ -382,12 +382,12 @@ mod tests {
         // Throw Error if ticket does exists in the contract
         let msg = Cw721SellableExecuteMsg::RedeemTicket {
             address: String::from(OWNER),
-            ticket_id: String::from("OWNER_TICKET")
+            ticket_id: String::from("OWNER_TICKET"),
         };
         let exec_res = context.execute(mock_info(CREATOR, &[]), msg).err();
         match exec_res {
             None => assert!(false),
-            _ => assert!(true)
+            _ => assert!(true),
         };
 
         // Make sure the owner param is the same as ticket owner in contract
@@ -407,12 +407,12 @@ mod tests {
 
         let msg = Cw721SellableExecuteMsg::RedeemTicket {
             address: String::from(BUYER), // Ticket owner is BUYER here
-            ticket_id: String::from("Burnt_Event#1")
+            ticket_id: String::from("Burnt_Event#1"),
         };
         let exec_res = context.execute(mock_info(CREATOR, &[]), msg).err();
         match exec_res {
             Some(ContractError::Unauthorized) => assert!(true),
-            _ => assert!(false)
+            _ => assert!(false),
         };
 
         // Make sure the ticket is not locked  or redeemed
@@ -433,12 +433,12 @@ mod tests {
         // Try to redeem locked ticket
         let msg = Cw721SellableExecuteMsg::RedeemTicket {
             address: String::from(OWNER),
-            ticket_id: String::from("Burnt_Locked#1")
+            ticket_id: String::from("Burnt_Locked#1"),
         };
         let exec_res = context.execute(mock_info(CREATOR, &[]), msg).err();
         match exec_res {
             Some(ContractError::Locked) => assert!(true),
-            _ => assert!(false)
+            _ => assert!(false),
         };
 
         // Make sure the ticket metadata is updated
@@ -460,23 +460,28 @@ mod tests {
 
         let msg = Cw721SellableExecuteMsg::RedeemTicket {
             address: String::from(OWNER),
-            ticket_id: String::from(token_id)
+            ticket_id: String::from(token_id),
         };
         context.execute(mock_info(CREATOR, &[]), msg).unwrap();
 
         let contract = Cw721SellableContract::default();
 
-        let res = contract.nft_info(context.deps.as_ref(), token_id.to_string()).unwrap();
+        let res = contract
+            .nft_info(context.deps.as_ref(), token_id.to_string())
+            .unwrap();
         match res {
-            NftInfoResponse::<Extension> { token_uri, extension } => {
+            NftInfoResponse::<Extension> {
+                token_uri,
+                extension,
+            } => {
                 let metadata = extension.unwrap();
                 if metadata.redeemed.unwrap() {
                     assert!(true);
                 } else {
                     assert!(false);
                 }
-            },
-            _ => assert!(false)
+            }
+            _ => assert!(false),
         }
     }
 }

@@ -6,7 +6,6 @@ use cosmwasm_std::{
 };
 use schemars::Map;
 
-
 pub fn try_buy(deps: DepsMut, info: MessageInfo, limit: Uint64) -> Result<Response, ContractError> {
     let coin = deps.querier.query_balance(&info.sender, "burnt")?;
     if coin.amount < limit.into() {
@@ -105,7 +104,7 @@ pub fn try_redeem(
     deps: DepsMut,
     info: MessageInfo,
     address: String,
-    ticket_id: &String
+    ticket_id: &String,
 ) -> Result<Response, ContractError> {
     let contract = Cw721SellableContract::default();
 
@@ -125,12 +124,14 @@ pub fn try_redeem(
 
     // Make sure ticket isn't locked or redeemed
     match ticket.extension {
-        Some(ref metadata) => if (*metadata).redeemed.unwrap_or(false) {
-            return Err(ContractError::Redeemed);
-        } else if (*metadata).locked.unwrap_or(false) {
-            return Err(ContractError::Locked);
-        },
-        None => ()
+        Some(ref metadata) => {
+            if (*metadata).redeemed.unwrap_or(false) {
+                return Err(ContractError::Redeemed);
+            } else if (*metadata).locked.unwrap_or(false) {
+                return Err(ContractError::Locked);
+            }
+        }
+        None => (),
     }
 
     // Mark ticket as redeemed and locked
@@ -138,13 +139,13 @@ pub fn try_redeem(
         Some(ref mut metadata) => {
             (*metadata).redeemed = Some(true);
             (*metadata).locked = Some(true);
-        },
-        None => ()
+        }
+        None => (),
     }
     // Save change into storage
     contract.tokens.save(deps.storage, ticket_id, &ticket)?;
 
-    return Ok(Response::new().add_attribute("method", "redeem"))
+    return Ok(Response::new().add_attribute("method", "redeem"));
 }
 
 // todo: is there a way to use the cw721 base function here?
