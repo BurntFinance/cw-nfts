@@ -33,6 +33,8 @@ pub struct Metadata {
     /// question: how do we validate this?
     pub royalty_payment_address: Option<String>,
     pub list_price: Option<Uint64>,
+    pub locked: Option<bool>,
+    pub redeemed: Option<bool>,
 }
 
 pub type Extension = Option<Metadata>;
@@ -48,7 +50,7 @@ mod entry {
     use super::*;
 
     use crate::error::ContractError;
-    use crate::execute::{try_buy, try_list};
+    use crate::execute::{try_buy, try_list, try_redeem};
     use crate::msg::{Cw721SellableExecuteMsg, Cw721SellableQueryMsg};
     use crate::query::listed_tokens;
     use cosmwasm_std::{entry_point, to_binary};
@@ -89,6 +91,7 @@ mod entry {
         match msg {
             List { listings } => try_list(deps, env, info, listings),
             Buy { limit } => try_buy(deps, info, limit),
+            RedeemTicket { address, ticket_id } => try_redeem(deps, info, address, &ticket_id),
             BaseMsg(base_msg) => Cw721SellableContract::default()
                 .execute(deps, env, info, base_msg)
                 .map_err(|x| x.into()),
@@ -99,12 +102,18 @@ mod entry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::{Context, ContractInfo};
+    use crate::entry::{execute, instantiate, query};
+    use crate::error::ContractError;
+    use crate::test_utils::test_utils::{Context, ContractInfo};
     use cosmwasm_std::{Addr, BankMsg, Coin, CosmosMsg};
 
     use crate::msg::Cw721SellableQueryMsg;
     use crate::query::ListedTokensResponse;
     use cosmwasm_std::testing::mock_info;
+    use cw2981_royalties::msg::Cw2981QueryMsg;
+    use cw2981_royalties::InstantiateMsg;
+    use cw721::Cw721Query;
+    use cw721::NftInfoResponse;
     use schemars::Map;
 
     const CREATOR: &str = "creator";
@@ -347,5 +356,132 @@ mod tests {
             .expect("expected token to exist");
 
         assert_eq!(enterprise_info.owner, Addr::unchecked(BUYER));
+    }
+    #[test]
+    fn redeem_ticket() {
+        let mut context = Context::new(
+            ContractInfo {
+                name: "Ticketing".to_string(),
+                symbol: "TICK".to_string(),
+            },
+            CREATOR,
+            Some(&[]),
+        );
+
+        // Make sure only the owner of the contract can call method
+        let msg = Cw721SellableExecuteMsg::RedeemTicket {
+            address: String::from(OWNER),
+            ticket_id: String::from("OWNER_TICKET"),
+        };
+        let exec_res = context.execute(mock_info(OWNER, &[]), msg).err();
+        match exec_res {
+            Some(ContractError::Unauthorized) => assert!(true),
+            _ => assert!(false),
+        };
+
+        // Throw Error if ticket does exists in the contract
+        let msg = Cw721SellableExecuteMsg::RedeemTicket {
+            address: String::from(OWNER),
+            ticket_id: String::from("OWNER_TICKET"),
+        };
+        let exec_res = context.execute(mock_info(CREATOR, &[]), msg).err();
+        match exec_res {
+            None => assert!(false),
+            _ => assert!(true),
+        };
+
+        // Make sure the owner param is the same as ticket owner in contract
+        let token_id = "Burnt_Event#1";
+        let mint_msg = cw721_base::MintMsg {
+            token_id: token_id.to_string(),
+            owner: OWNER.to_string(), // Create a ticket belonging to OWNER
+            token_uri: Some("https://starships.example.com/Starship/Enterprise.json".into()),
+            extension: Some(Metadata {
+                description: Some("Burnt event ticket #1".into()),
+                name: Some("Ticket #1".to_string()),
+                ..Metadata::default()
+            }),
+        };
+        let exec_msg = ExecuteMsg::BaseMsg(cw721_base::ExecuteMsg::Mint(mint_msg.clone()));
+        context.execute(mock_info(CREATOR, &[]), exec_msg).unwrap();
+
+        let msg = Cw721SellableExecuteMsg::RedeemTicket {
+            address: String::from(BUYER), // Ticket owner is BUYER here
+            ticket_id: String::from("Burnt_Event#1"),
+        };
+        let exec_res = context.execute(mock_info(CREATOR, &[]), msg).err();
+        match exec_res {
+            Some(ContractError::Unauthorized) => assert!(true),
+            _ => assert!(false),
+        };
+
+        // Make sure the ticket is not locked  or redeemed
+        let locked_token_id = "Burnt_Locked#1";
+        let mint_msg = cw721_base::MintMsg {
+            token_id: locked_token_id.to_string(),
+            owner: OWNER.to_string(),
+            token_uri: Some("https://starships.example.com/Starship/Enterprise.json".into()),
+            extension: Some(Metadata {
+                description: Some("Burnt locked event ticket #1".into()),
+                name: Some("Locked ticket #1".to_string()),
+                locked: Some(true),
+                ..Metadata::default()
+            }),
+        };
+        let exec_msg = ExecuteMsg::BaseMsg(cw721_base::ExecuteMsg::Mint(mint_msg.clone()));
+        context.execute(mock_info(CREATOR, &[]), exec_msg).unwrap();
+        // Try to redeem locked ticket
+        let msg = Cw721SellableExecuteMsg::RedeemTicket {
+            address: String::from(OWNER),
+            ticket_id: String::from("Burnt_Locked#1"),
+        };
+        let exec_res = context.execute(mock_info(CREATOR, &[]), msg).err();
+        match exec_res {
+            Some(ContractError::Locked) => assert!(true),
+            _ => assert!(false),
+        };
+
+        // Make sure the ticket metadata is updated
+        let token_id = "Burnt_Event#2";
+        let mint_msg = cw721_base::MintMsg {
+            token_id: token_id.to_string(),
+            owner: OWNER.to_string(), // Create a ticket belonging to OWNER
+            token_uri: Some("https://starships.example.com/Starship/Enterprise.json".into()),
+            extension: Some(Metadata {
+                description: Some("Burnt event ticket #1".into()),
+                name: Some("Ticket #2".to_string()),
+                locked: Some(false),
+                redeemed: Some(false),
+                ..Metadata::default()
+            }),
+        };
+        let exec_msg = ExecuteMsg::BaseMsg(cw721_base::ExecuteMsg::Mint(mint_msg.clone()));
+        context.execute(mock_info(CREATOR, &[]), exec_msg).unwrap();
+
+        let msg = Cw721SellableExecuteMsg::RedeemTicket {
+            address: String::from(OWNER),
+            ticket_id: String::from(token_id),
+        };
+        context.execute(mock_info(CREATOR, &[]), msg).unwrap();
+
+        let contract = Cw721SellableContract::default();
+
+        let res = contract
+            .nft_info(context.deps.as_ref(), token_id.to_string())
+            .unwrap();
+        match res {
+            NftInfoResponse::<Extension> {
+                token_uri,
+                extension,
+            } => {
+                let metadata = extension.unwrap();
+                if metadata.redeemed.unwrap() {
+                    assert!(true);
+                } else {
+                    assert!(false);
+                }
+            }
+            _ => assert!(false),
+        }
     }
 }

@@ -9,6 +9,15 @@ pub enum ContractError {
     #[error("Unauthorized")]
     Unauthorized,
 
+    #[error("Redeemed")]
+    Redeemed,
+
+    #[error("Locked")]
+    Locked,
+
+    #[error("NoMetadataPresent")]
+    NoMetadataPresent,
+
     #[error("No tokens listed for sale")]
     NoListedTokensError,
 

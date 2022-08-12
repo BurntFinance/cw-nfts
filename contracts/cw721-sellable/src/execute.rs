@@ -6,7 +6,6 @@ use cosmwasm_std::{
 };
 use schemars::Map;
 
-
 pub fn try_buy(deps: DepsMut, info: MessageInfo, limit: Uint64) -> Result<Response, ContractError> {
     let coin = deps.querier.query_balance(&info.sender, "burnt")?;
     if coin.amount < limit.into() {
@@ -99,6 +98,49 @@ pub fn try_list(
     }
 
     Ok(Response::new().add_attribute("method", "list"))
+}
+
+pub fn try_redeem(
+    deps: DepsMut,
+    info: MessageInfo,
+    address: String,
+    ticket_id: &String,
+) -> Result<Response, ContractError> {
+    let contract = Cw721SellableContract::default();
+
+    // Validate only contract owner can call method
+    let minter = contract.minter.load(deps.storage)?;
+    if info.sender != minter {
+        return Err(ContractError::Unauthorized {});
+    }
+
+    // Load ticket, error if ticket does not exist
+    let mut ticket = contract.tokens.load(deps.storage, ticket_id)?;
+
+    // Make sure owner param matches ticket owner
+    if ticket.owner != address {
+        return Err(ContractError::Unauthorized);
+    }
+
+    // Make sure ticket isn't locked or redeemed
+    if let Some(ref mut metadata) = ticket.extension {
+        if metadata.redeemed == Some(true) {
+            return Err(ContractError::Redeemed);
+        } else if metadata.locked == Some(true) {
+            return Err(ContractError::Locked);
+        } else {
+            // Mark ticket as redeemed and locked
+            metadata.redeemed = Some(true);
+            metadata.locked = Some(true);
+        }
+    } else {
+        return Err(ContractError::NoMetadataPresent);
+    }
+
+    // Save change into storage
+    contract.tokens.save(deps.storage, ticket_id, &ticket)?;
+
+    return Ok(Response::new().add_attribute("method", "redeem"));
 }
 
 // todo: is there a way to use the cw721 base function here?
