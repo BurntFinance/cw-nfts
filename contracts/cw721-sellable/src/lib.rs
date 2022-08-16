@@ -33,8 +33,8 @@ pub struct Metadata {
     /// question: how do we validate this?
     pub royalty_payment_address: Option<String>,
     pub list_price: Option<Uint64>,
-    pub locked: Option<bool>,
-    pub redeemed: Option<bool>,
+    pub locked: bool,
+    pub redeemed: bool,
 }
 
 pub type Extension = Option<Metadata>;
@@ -424,7 +424,7 @@ mod tests {
             extension: Some(Metadata {
                 description: Some("Burnt locked event ticket #1".into()),
                 name: Some("Locked ticket #1".to_string()),
-                locked: Some(true),
+                locked: true,
                 ..Metadata::default()
             }),
         };
@@ -437,7 +437,7 @@ mod tests {
         };
         let exec_res = context.execute(mock_info(CREATOR, &[]), msg).err();
         match exec_res {
-            Some(ContractError::Locked) => assert!(true),
+            Some(ContractError::TicketLocked) => assert!(true),
             _ => assert!(false),
         };
 
@@ -450,8 +450,8 @@ mod tests {
             extension: Some(Metadata {
                 description: Some("Burnt event ticket #1".into()),
                 name: Some("Ticket #2".to_string()),
-                locked: Some(false),
-                redeemed: Some(false),
+                locked: false,
+                redeemed: false,
                 ..Metadata::default()
             }),
         };
@@ -475,7 +475,7 @@ mod tests {
                 extension,
             } => {
                 let metadata = extension.unwrap();
-                if metadata.redeemed.unwrap() {
+                if metadata.redeemed {
                     assert!(true);
                 } else {
                     assert!(false);
@@ -483,5 +483,86 @@ mod tests {
             }
             _ => assert!(false),
         }
+    }
+
+    #[test]
+    fn validate_locked_tickets() {
+        let mut context = Context::new(
+            ContractInfo {
+                name: "Ticketing".to_string(),
+                symbol: "TICK".to_string(),
+            },
+            CREATOR,
+            Some(&[]),
+        );
+        // Make sure the locked ticket cannot be listed
+        let locked_token_id = "Burnt_Locked#1";
+        let mint_msg = cw721_base::MintMsg {
+            token_id: locked_token_id.to_string(),
+            owner: OWNER.to_string(), // Create a ticket belonging to OWNER
+            token_uri: Some("https://starships.example.com/Starship/Enterprise.json".into()),
+            extension: Some(Metadata {
+                description: Some("Burnt event ticket #1".into()),
+                name: Some("Burnt_Locked#1".to_string()),
+                locked: true,
+                redeemed: false,
+                ..Metadata::default()
+            }),
+        };
+        let exec_msg = ExecuteMsg::BaseMsg(cw721_base::ExecuteMsg::Mint(mint_msg.clone()));
+        context.execute(mock_info(CREATOR, &[]), exec_msg).expect("expected mint to work");
+
+        let owner_info = mock_info(OWNER, &[]);
+        let list_msg = Cw721SellableExecuteMsg::List {
+            listings: Map::from([(locked_token_id.to_string(), Uint64::from(30 as u64))]),
+        };
+        let res = context
+            .execute(owner_info.clone(), list_msg).err();
+        match res {
+            Some(ContractError::TicketLocked) => assert!(true),
+            _ => { 
+                println!("{:?}", res);
+                assert!(false)
+            },
+        }; 
+
+        // Make sure listed locked tickets are de-listed after redeeming
+        let locked_token_id = "Burnt_Locked#2";
+        let mint_msg = cw721_base::MintMsg {
+            token_id: locked_token_id.to_string(),
+            owner: OWNER.to_string(), // Create a ticket belonging to OWNER
+            token_uri: Some("https://starships.example.com/Starship/Enterprise.json".into()),
+            extension: Some(Metadata {
+                description: Some("Burnt event ticket #1".into()),
+                name: Some("Burnt_Locked#2".to_string()),
+                locked: false,
+                redeemed: false,
+                ..Metadata::default()
+            }),
+        };
+        let exec_msg = ExecuteMsg::BaseMsg(cw721_base::ExecuteMsg::Mint(mint_msg.clone()));
+        context.execute(mock_info(CREATOR, &[]), exec_msg).expect("expected mint to work");
+
+        // List a token
+        let owner_info = mock_info(OWNER, &[]);
+        let list_msg = Cw721SellableExecuteMsg::List {
+            listings: Map::from([(locked_token_id.to_string(), Uint64::from(30 as u64))]),
+        };
+        context
+            .execute(owner_info.clone(), list_msg).expect("expected listing ticket to work");
+        // Redeem the ticket
+        let msg = Cw721SellableExecuteMsg::RedeemTicket {
+            address: String::from(OWNER),
+            ticket_id: String::from("Burnt_Locked#2"),
+        };
+        context.execute(mock_info(CREATOR, &[]), msg).expect("expected redeem ticket to work");
+        // Make sure the ticket is de-listed
+        let query_msg = Cw721SellableQueryMsg::ListedTokens {
+            start_after: None,
+            limit: None,
+        };
+        let query_res: ListedTokensResponse = context.query(query_msg.clone()).unwrap();
+        assert_eq!(0, query_res.tokens.len());
+        
     }
 }
