@@ -557,12 +557,24 @@ mod tests {
         };
         context.execute(mock_info(CREATOR, &[]), msg).expect("expected redeem ticket to work");
         // Make sure the ticket is de-listed
-        let query_msg = Cw721SellableQueryMsg::ListedTokens {
-            start_after: None,
-            limit: None,
+        let contract = Cw721SellableContract::default();
+
+        let res = contract
+            .nft_info(context.deps.as_ref(), locked_token_id.to_string())
+            .unwrap();
+        match res {
+            NftInfoResponse::<Extension> {
+                token_uri: _,
+                extension,
+            } => {
+                let metadata = extension.unwrap_or(Metadata::default());
+                if metadata.redeemed {
+                    assert!(true);
+                } else {
+                    assert!(false);
+                }
+            }
         };
-        let query_res: ListedTokensResponse = context.query(query_msg.clone()).unwrap();
-        assert_eq!(0, query_res.tokens.len());
         
     }
 }
