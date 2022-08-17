@@ -5,7 +5,6 @@ use crate::{Cw721SellableContract, Extension};
 use cosmwasm_std::{
     Addr, BankMsg, Coin, Deps, DepsMut, Env, MessageInfo, Order, Response, StdError, Uint64,
 };
-use cw721_base::{ MintMsg };
 use schemars::Map;
 
 pub fn try_buy(deps: DepsMut, info: MessageInfo, limit: Uint64) -> Result<Response, ContractError> {
@@ -199,11 +198,13 @@ fn get_ticket_id(msg: &cw721_base::ExecuteMsg<Extension>) -> Option<String> {
         cw721_base::ExecuteMsg::Approve { token_id, .. } => Some(token_id.to_string()),
         cw721_base::ExecuteMsg::Revoke { token_id, .. } => Some(token_id.to_string()),
         _ => None,
-    }
+    };
 }
 
-pub fn validate_locked_ticket( deps: &DepsMut, msg: &cw721_base::ExecuteMsg<Extension> ) -> Result<(), ContractError> {
-   
+pub fn validate_locked_ticket(
+    deps: &DepsMut,
+    msg: &cw721_base::ExecuteMsg<Extension>,
+) -> Result<(), ContractError> {
     let ticket_id = get_ticket_id(msg);
 
     if let Some(ticket_id) = ticket_id {
