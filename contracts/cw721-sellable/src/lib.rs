@@ -87,7 +87,6 @@ mod entry {
         msg: ExecuteMsg,
     ) -> Result<Response, ContractError> {
         use Cw721SellableExecuteMsg::*;
-        let msg_copy = msg.clone();
         match msg {
             List { listings } => try_list(deps, env, info, listings),
             Buy { limit } => try_buy(deps, info, limit),

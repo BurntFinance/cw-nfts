@@ -25,8 +25,8 @@ pub fn try_buy(deps: DepsMut, info: MessageInfo, limit: Uint64) -> Result<Respon
     {
         let opt_price = info.extension.as_ref().and_then(|meta| meta.list_price);
         let metadata = info.extension.ok_or(ContractError::NoMetadataPresent)?;
-        if let Some(list_price) = opt_price {
-            if !metadata.redeemed {
+        if !metadata.redeemed {
+            if let Some(list_price) = opt_price {
                 if let Ok((_, _, lowest_price)) = lowest {
                     if list_price < lowest_price {
                         lowest = Ok((id, info.owner, list_price))
@@ -212,7 +212,7 @@ pub fn validate_locked_ticket(
         let contract = Cw721SellableContract::default();
         let ticket = contract.tokens.load(deps.storage, ticket_id.as_str())?;
         // confirm token aren't locked or redeemed
-        if let Some(ref metadata) = ticket.extension {
+        if let Some(metadata) = ticket.extension {
             if metadata.redeemed {
                 return Err(ContractError::TicketRedeemed);
             } else if metadata.locked {
