@@ -1,9 +1,11 @@
 use crate::error::ContractError;
 use crate::error::ContractError::{LimitBelowLowestOffer, NoListedTokensError};
-use crate::Cw721SellableContract;
+use crate::{Cw721SellableContract, Extension};
+
 use cosmwasm_std::{
     Addr, BankMsg, Coin, Deps, DepsMut, Env, MessageInfo, Order, Response, StdError, Uint64,
 };
+use cw721_base::{ MintMsg };
 use schemars::Map;
 
 pub fn try_buy(deps: DepsMut, info: MessageInfo, limit: Uint64) -> Result<Response, ContractError> {
@@ -187,4 +189,39 @@ pub fn check_can_send(
             Some(opt) if !opt.is_expired(&env.block) => Ok(()),
             _ => Err(ContractError::Unauthorized),
         })
+}
+
+fn get_ticket_id(msg: &cw721_base::ExecuteMsg<Extension>) -> Option<String> {
+    // get token id from msg
+    return match msg {
+        cw721_base::ExecuteMsg::TransferNft { token_id, .. } => Some(token_id.to_string()),
+        cw721_base::ExecuteMsg::SendNft { token_id, .. } => Some(token_id.to_string()),
+        cw721_base::ExecuteMsg::Approve { token_id, .. } => Some(token_id.to_string()),
+        cw721_base::ExecuteMsg::Revoke { token_id, .. } => Some(token_id.to_string()),
+        _ => None,
+    }
+}
+
+pub fn validate_locked_ticket( deps: &DepsMut, msg: &cw721_base::ExecuteMsg<Extension> ) -> Result<(), ContractError> {
+   
+    let ticket_id = get_ticket_id(msg);
+
+    if let Some(ticket_id) = ticket_id {
+        let contract = Cw721SellableContract::default();
+        let ticket = contract.tokens.load(deps.storage, ticket_id.as_str())?;
+        // confirm token aren't locked or redeemed
+        if let Some(ref metadata) = ticket.extension {
+            if metadata.redeemed {
+                return Err(ContractError::TicketRedeemed);
+            } else if metadata.locked {
+                return Err(ContractError::TicketLocked);
+            } else {
+                return Ok(());
+            }
+        } else {
+            return Err(ContractError::NoMetadataPresent);
+        }
+    } else {
+        return Ok(());
+    }
 }
