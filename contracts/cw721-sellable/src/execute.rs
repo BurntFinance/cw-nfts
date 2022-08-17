@@ -1,6 +1,7 @@
 use crate::error::ContractError;
 use crate::error::ContractError::{LimitBelowLowestOffer, NoListedTokensError};
 use crate::{Cw721SellableContract, Extension};
+use cw721_base::{ExecuteMsg};
 
 use cosmwasm_std::{
     Addr, BankMsg, Coin, Deps, DepsMut, Env, MessageInfo, Order, Response, StdError, Uint64,
@@ -190,7 +191,7 @@ pub fn check_can_send(
         })
 }
 
-fn get_ticket_id(msg: &cw721_base::ExecuteMsg<Extension>) -> Option<String> {
+fn get_ticket_id(msg: &ExecuteMsg<Extension>) -> Option<String> {
     // get token id from msg
     return match msg {
         cw721_base::ExecuteMsg::TransferNft { token_id, .. } => Some(token_id.to_string()),
@@ -203,7 +204,7 @@ fn get_ticket_id(msg: &cw721_base::ExecuteMsg<Extension>) -> Option<String> {
 
 pub fn validate_locked_ticket(
     deps: &DepsMut,
-    msg: &cw721_base::ExecuteMsg<Extension>,
+    msg: &ExecuteMsg<Extension>,
 ) -> Result<(), ContractError> {
     let ticket_id = get_ticket_id(msg);
 
