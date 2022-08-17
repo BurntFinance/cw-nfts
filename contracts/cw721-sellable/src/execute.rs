@@ -1,7 +1,7 @@
 use crate::error::ContractError;
 use crate::error::ContractError::{LimitBelowLowestOffer, NoListedTokensError};
 use crate::{Cw721SellableContract, Extension};
-use cw721_base::{ExecuteMsg};
+use cw721_base::ExecuteMsg;
 
 use cosmwasm_std::{
     Addr, BankMsg, Coin, Deps, DepsMut, Env, MessageInfo, Order, Response, StdError, Uint64,
