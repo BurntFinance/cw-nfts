@@ -129,10 +129,10 @@ pub fn try_redeem(
 
     // Make sure ticket isn't locked or redeemed
     if let Some(ref mut metadata) = ticket.extension {
-        if metadata.redeemed {
-            return Err(ContractError::TicketRedeemed);
-        } else if metadata.locked {
+        if metadata.locked {
             return Err(ContractError::TicketLocked);
+        } else if metadata.redeemed {
+            return Err(ContractError::TicketRedeemed);
         } else {
             // Mark ticket as redeemed and locked
             metadata.redeemed = true;
