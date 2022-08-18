@@ -1,6 +1,8 @@
 use crate::error::ContractError;
 use crate::error::ContractError::{LimitBelowLowestOffer, NoListedTokensError};
-use crate::Cw721SellableContract;
+use crate::{Cw721SellableContract, Extension};
+use cw721_base::ExecuteMsg;
+
 use cosmwasm_std::{
     Addr, BankMsg, Coin, Deps, DepsMut, Env, MessageInfo, Order, Response, StdError, Uint64,
 };
@@ -21,14 +23,17 @@ pub fn try_buy(deps: DepsMut, info: MessageInfo, limit: Uint64) -> Result<Respon
         .range(deps.storage, None, None, Order::Ascending)
         .flatten()
     {
-        let opt_price = info.extension.and_then(|meta| meta.list_price);
-        if let Some(list_price) = opt_price {
-            if let Ok((_, _, lowest_price)) = lowest {
-                if list_price < lowest_price {
+        let opt_price = info.extension.as_ref().and_then(|meta| meta.list_price);
+        let metadata = info.extension.ok_or(ContractError::NoMetadataPresent)?;
+        if !metadata.redeemed {
+            if let Some(list_price) = opt_price {
+                if let Ok((_, _, lowest_price)) = lowest {
+                    if list_price < lowest_price {
+                        lowest = Ok((id, info.owner, list_price))
+                    }
+                } else {
                     lowest = Ok((id, info.owner, list_price))
                 }
-            } else {
-                lowest = Ok((id, info.owner, list_price))
             }
         }
     }
@@ -124,14 +129,16 @@ pub fn try_redeem(
 
     // Make sure ticket isn't locked or redeemed
     if let Some(ref mut metadata) = ticket.extension {
-        if metadata.redeemed == Some(true) {
-            return Err(ContractError::Redeemed);
-        } else if metadata.locked == Some(true) {
-            return Err(ContractError::Locked);
+        if metadata.locked {
+            return Err(ContractError::TicketLocked);
+        } else if metadata.redeemed {
+            return Err(ContractError::TicketRedeemed);
         } else {
             // Mark ticket as redeemed and locked
-            metadata.redeemed = Some(true);
-            metadata.locked = Some(true);
+            metadata.redeemed = true;
+            metadata.locked = true;
+            // de-list ticket if it is listed
+            metadata.list_price = None;
         }
     } else {
         return Err(ContractError::NoMetadataPresent);
@@ -151,7 +158,15 @@ pub fn check_can_send(
     token_id: &String,
 ) -> Result<(), ContractError> {
     let contract = Cw721SellableContract::default();
-    let token = contract.tokens.load(deps.storage, token_id)?;
+    let mut token = contract.tokens.load(deps.storage, token_id)?;
+    // confirm token aren't locked or redeemed
+    if let Some(ref mut metadata) = token.extension {
+        if metadata.redeemed {
+            return Err(ContractError::TicketRedeemed);
+        } else if metadata.locked {
+            return Err(ContractError::TicketLocked);
+        }
+    }
     if token.owner == info.sender {
         return Ok(());
     }
@@ -174,4 +189,41 @@ pub fn check_can_send(
             Some(opt) if !opt.is_expired(&env.block) => Ok(()),
             _ => Err(ContractError::Unauthorized),
         })
+}
+
+fn get_ticket_id(msg: &ExecuteMsg<Extension>) -> Option<String> {
+    // get token id from msg
+    return match msg {
+        cw721_base::ExecuteMsg::TransferNft { token_id, .. } => Some(token_id.to_string()),
+        cw721_base::ExecuteMsg::SendNft { token_id, .. } => Some(token_id.to_string()),
+        cw721_base::ExecuteMsg::Approve { token_id, .. } => Some(token_id.to_string()),
+        cw721_base::ExecuteMsg::Revoke { token_id, .. } => Some(token_id.to_string()),
+        _ => None,
+    };
+}
+
+pub fn validate_locked_ticket(
+    deps: &DepsMut,
+    msg: &ExecuteMsg<Extension>,
+) -> Result<(), ContractError> {
+    let ticket_id = get_ticket_id(msg);
+
+    if let Some(ticket_id) = ticket_id {
+        let contract = Cw721SellableContract::default();
+        let ticket = contract.tokens.load(deps.storage, ticket_id.as_str())?;
+        // confirm token aren't locked or redeemed
+        if let Some(metadata) = ticket.extension {
+            if metadata.redeemed {
+                return Err(ContractError::TicketRedeemed);
+            } else if metadata.locked {
+                return Err(ContractError::TicketLocked);
+            } else {
+                return Ok(());
+            }
+        } else {
+            return Err(ContractError::NoMetadataPresent);
+        }
+    } else {
+        return Ok(());
+    }
 }

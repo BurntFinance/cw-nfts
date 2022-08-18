@@ -10,10 +10,10 @@ pub enum ContractError {
     Unauthorized,
 
     #[error("Redeemed")]
-    Redeemed,
+    TicketRedeemed,
 
     #[error("Locked")]
-    Locked,
+    TicketLocked,
 
     #[error("NoMetadataPresent")]
     NoMetadataPresent,
