@@ -92,9 +92,25 @@ mod entry {
             List { listings } => try_list(deps, env, info, listings),
             Buy { limit } => try_buy(deps, info, limit),
             RedeemTicket { address, ticket_id } => try_redeem(deps, info, address, &ticket_id),
-            BaseMsg(base_msg) => Cw721SellableContract::default()
-                .execute(deps, env, info, base_msg)
-                .map_err(|x| x.into()),
+            BaseMsg(base_msg) => {
+                match base_msg {
+                    cw721_base::ExecuteMsg::Mint(mint_msg) => {
+                        // rebuild base contract mint msg
+                        let mint_msg = cw721_base::MintMsg {
+                            token_id: mint_msg.token_id,
+                            owner: mint_msg.owner,
+                            token_uri: mint_msg.token_uri,
+                            extension: mint_msg.extension,
+                        };
+                        let num_of_ticket = mint_msg.num_of_ticket;
+                        Cw721SellableContract::default().execute(deps, env, info, mint_msg)
+                        .map_err(|x| x.into())
+                    },
+                    _ => Cw721SellableContract::default()
+                    .execute(deps, env, info, base_msg)
+                    .map_err(|x| x.into())
+                }
+            }
         }
     }
 }
