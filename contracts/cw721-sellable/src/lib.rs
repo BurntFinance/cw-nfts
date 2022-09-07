@@ -6,7 +6,7 @@ mod msg;
 mod query;
 mod test_utils;
 
-use crate::msg::Cw721SellableExecuteMsg;
+use crate::msg::{Cw721SellableExecuteMsg, InstantiateMsg};
 use cosmwasm_std::{Empty, Uint64};
 use cw2981_royalties::Trait;
 use cw721_base::Cw721Contract;
@@ -37,16 +37,31 @@ pub struct Metadata {
     pub redeemed: bool,
 }
 
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+pub struct Sponsor {
+    pub id: String,
+    pub name: String,
+}
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug, Default)]
+pub struct ContractMetadata {
+    pub initial_price: Uint64,
+    pub royalty: Uint64,
+    pub num_of_ticket: Uint64,
+    pub sponsors: Vec<Sponsor>,
+}
+
 pub type Extension = Option<Metadata>;
 
 pub type MintExtension = Option<Extension>;
 
-pub type Cw721SellableContract<'a> = Cw721Contract<'a, Extension, Empty, Empty>;
+pub type Cw721SellableContract<'a> = Cw721Contract<'a, Extension, Empty, ContractMetadata>;
 
 pub type ExecuteMsg = Cw721SellableExecuteMsg<Extension>;
 
 // #[cfg(not(feature = "library"))]
 mod entry {
+    use std::borrow::Borrow;
+
     use super::*;
 
     use crate::error::ContractError;
@@ -55,7 +70,6 @@ mod entry {
     use crate::query::listed_tokens;
     use cosmwasm_std::{entry_point, to_binary};
     use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
-    use cw2981_royalties::InstantiateMsg;
 
     #[entry_point]
     pub fn instantiate(
@@ -64,7 +78,36 @@ mod entry {
         info: MessageInfo,
         msg: InstantiateMsg,
     ) -> StdResult<Response> {
-        Cw721SellableContract::default().instantiate(deps, env, info, msg)
+        let contract = Cw721SellableContract::default();
+
+        let mut heap_deps = Box::new(deps);
+        contract.instantiate(
+            heap_deps.branch(),
+            env.clone(),
+            info.clone(),
+            msg.clone().into(),
+        )?;
+        contract
+            .contract_metadata
+            .save(heap_deps.storage, &msg.contract_metadata)?;
+
+        // Mint the number of tickets required
+        for n in 1..=msg.contract_metadata.num_of_ticket.into() {
+            let mint_msg = cw721_base::MintMsg {
+                token_id: n.to_string(),
+                owner: msg.minter.clone(),
+                token_uri: Some("https://starships.example.com/Starship/Enterprise.json".into()),
+                extension: Some(Metadata {
+                    description: Some(msg.description.clone()),
+                    name: Some(msg.name.clone()),
+                    ..Metadata::default()
+                }),
+            };
+            contract
+                .mint(heap_deps.branch(), env.clone(), info.clone(), mint_msg)
+                .unwrap();
+        }
+        Ok(Response::default())
     }
 
     #[entry_point]
@@ -92,25 +135,9 @@ mod entry {
             List { listings } => try_list(deps, env, info, listings),
             Buy { limit } => try_buy(deps, info, limit),
             RedeemTicket { address, ticket_id } => try_redeem(deps, info, address, &ticket_id),
-            BaseMsg(base_msg) => {
-                match base_msg {
-                    cw721_base::ExecuteMsg::Mint(mint_msg) => {
-                        // rebuild base contract mint msg
-                        let mint_msg = cw721_base::MintMsg {
-                            token_id: mint_msg.token_id,
-                            owner: mint_msg.owner,
-                            token_uri: mint_msg.token_uri,
-                            extension: mint_msg.extension,
-                        };
-                        let num_of_ticket = mint_msg.num_of_ticket;
-                        Cw721SellableContract::default().execute(deps, env, info, mint_msg)
-                        .map_err(|x| x.into())
-                    },
-                    _ => Cw721SellableContract::default()
-                    .execute(deps, env, info, base_msg)
-                    .map_err(|x| x.into())
-                }
-            }
+            BaseMsg(base_msg) => Cw721SellableContract::default()
+                .execute(deps, env, info, base_msg)
+                .map_err(|x| x.into()),
         }
     }
 }
@@ -125,7 +152,7 @@ mod tests {
 
     use crate::msg::Cw721SellableQueryMsg;
     use crate::query::ListedTokensResponse;
-    use cosmwasm_std::testing::mock_info;
+    use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
     use cw2981_royalties::msg::Cw2981QueryMsg;
     use cw2981_royalties::InstantiateMsg;
     use cw721::Cw721Query;
@@ -526,21 +553,22 @@ mod tests {
             }),
         };
         let exec_msg = ExecuteMsg::BaseMsg(cw721_base::ExecuteMsg::Mint(mint_msg.clone()));
-        context.execute(mock_info(CREATOR, &[]), exec_msg).expect("expected mint to work");
+        context
+            .execute(mock_info(CREATOR, &[]), exec_msg)
+            .expect("expected mint to work");
 
         let owner_info = mock_info(OWNER, &[]);
         let list_msg = Cw721SellableExecuteMsg::List {
             listings: Map::from([(locked_token_id.to_string(), Uint64::from(30 as u64))]),
         };
-        let res = context
-            .execute(owner_info.clone(), list_msg).err();
+        let res = context.execute(owner_info.clone(), list_msg).err();
         match res {
             Some(ContractError::TicketLocked) => assert!(true),
-            _ => { 
+            _ => {
                 println!("{:?}", res);
                 assert!(false)
-            },
-        }; 
+            }
+        };
 
         // Make sure listed locked tickets are de-listed after redeeming
         let locked_token_id = "Burnt_Locked#2";
@@ -557,7 +585,9 @@ mod tests {
             }),
         };
         let exec_msg = ExecuteMsg::BaseMsg(cw721_base::ExecuteMsg::Mint(mint_msg.clone()));
-        context.execute(mock_info(CREATOR, &[]), exec_msg).expect("expected mint to work");
+        context
+            .execute(mock_info(CREATOR, &[]), exec_msg)
+            .expect("expected mint to work");
 
         // List a token
         let owner_info = mock_info(OWNER, &[]);
@@ -565,13 +595,16 @@ mod tests {
             listings: Map::from([(locked_token_id.to_string(), Uint64::from(30 as u64))]),
         };
         context
-            .execute(owner_info.clone(), list_msg).expect("expected listing ticket to work");
+            .execute(owner_info.clone(), list_msg)
+            .expect("expected listing ticket to work");
         // Redeem the ticket
         let msg = Cw721SellableExecuteMsg::RedeemTicket {
             address: String::from(OWNER),
             ticket_id: String::from("Burnt_Locked#2"),
         };
-        context.execute(mock_info(CREATOR, &[]), msg).expect("expected redeem ticket to work");
+        context
+            .execute(mock_info(CREATOR, &[]), msg)
+            .expect("expected redeem ticket to work");
         // Make sure the ticket is de-listed
         let contract = Cw721SellableContract::default();
 
@@ -591,6 +624,37 @@ mod tests {
                 }
             }
         };
-        
+    }
+
+    #[test]
+    fn validate_multiple_ticket_mint() {
+        use crate::msg::InstantiateMsg;
+
+        let mut deps = mock_dependencies();
+        let creator_info = mock_info(CREATOR, &[]);
+        let contract = Cw721SellableContract::default();
+
+        // Instantiate a new contract
+        let instantiate_msg = InstantiateMsg {
+            name: "Burnt Ticketing".to_string(),
+            symbol: "BRNT".to_string(),
+            description: "Ticketing for the Burnt event".to_string(),
+            minter: CREATOR.to_string(),
+            contract_metadata: ContractMetadata {
+                num_of_ticket: Uint64::from(2 as u64),
+                ..ContractMetadata::default()
+            },
+        };
+
+        instantiate(deps.as_mut(), mock_env(), creator_info, instantiate_msg)
+            .expect("Contract Instantiated");
+
+        // Make sure 2 tickets were created
+        let token_count = contract.token_count(deps.as_mut().storage).unwrap_or(0);
+        assert_eq!(token_count, 2);
+
+        // Make sure ticket id 1 and ticket id 2 exists
+        contract.nft_info(deps.as_ref(), 1.to_string()).unwrap();
+        contract.nft_info(deps.as_ref(), 2.to_string()).unwrap();
     }
 }
