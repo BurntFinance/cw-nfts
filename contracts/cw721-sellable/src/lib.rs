@@ -46,7 +46,7 @@ pub struct Sponsor {
 pub struct ContractMetadata {
     pub initial_price: Uint64,
     pub royalty: Uint64,
-    pub num_of_ticket: Uint64,
+    pub num_of_tickets: Uint64,
     pub sponsors: Vec<Sponsor>,
 }
 
@@ -90,7 +90,7 @@ mod entry {
             .save(heap_deps.storage, &msg.contract_metadata)?;
 
         // Mint the number of tickets required
-        for n in 1..=msg.contract_metadata.num_of_ticket.into() {
+        for n in 1..=msg.contract_metadata.num_of_tickets.into() {
             let mint_msg = cw721_base::MintMsg {
                 token_id: n.to_string(),
                 owner: msg.minter.clone(),
@@ -639,7 +639,7 @@ mod tests {
             description: "Ticketing for the Burnt event".to_string(),
             minter: CREATOR.to_string(),
             contract_metadata: ContractMetadata {
-                num_of_ticket: Uint64::from(2 as u64),
+                num_of_tickets: Uint64::from(2 as u64),
                 ..ContractMetadata::default()
             },
         };
