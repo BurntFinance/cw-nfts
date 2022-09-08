@@ -44,6 +44,8 @@ pub struct Sponsor {
 }
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug, Default)]
 pub struct ContractMetadata {
+    pub description: String,
+    pub token_uri: Option<String>,
     pub initial_price: Uint64,
     pub royalty: Uint64,
     pub num_of_tickets: Uint64,
@@ -96,8 +98,9 @@ mod entry {
                 owner: msg.minter.clone(),
                 token_uri: Some("https://starships.example.com/Starship/Enterprise.json".into()),
                 extension: Some(Metadata {
-                    description: Some(msg.description.clone()),
+                    description: Some(msg.contract_metadata.description.clone()),
                     name: Some(msg.name.clone()),
+                    royalty_percentage: Some(msg.contract_metadata.royalty.clone().into()),
                     ..Metadata::default()
                 }),
             };
@@ -636,9 +639,9 @@ mod tests {
         let instantiate_msg = InstantiateMsg {
             name: "Burnt Ticketing".to_string(),
             symbol: "BRNT".to_string(),
-            description: "Ticketing for the Burnt event".to_string(),
             minter: CREATOR.to_string(),
             contract_metadata: ContractMetadata {
+                description: "Ticketing for the Burnt event".to_string(),
                 num_of_tickets: Uint64::from(2 as u64),
                 ..ContractMetadata::default()
             },
