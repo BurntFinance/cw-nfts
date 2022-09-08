@@ -60,12 +60,10 @@ pub type ExecuteMsg = Cw721SellableExecuteMsg<Extension>;
 
 // #[cfg(not(feature = "library"))]
 mod entry {
-    use std::borrow::Borrow;
-
     use super::*;
 
     use crate::error::ContractError;
-    use crate::execute::{try_buy, try_list, try_redeem};
+    use crate::execute::{try_buy, try_list, try_redeem, validate_locked_ticket};
     use crate::msg::{Cw721SellableExecuteMsg, Cw721SellableQueryMsg};
     use crate::query::listed_tokens;
     use cosmwasm_std::{entry_point, to_binary};
@@ -130,14 +128,16 @@ mod entry {
         msg: ExecuteMsg,
     ) -> Result<Response, ContractError> {
         use Cw721SellableExecuteMsg::*;
-
         match msg {
             List { listings } => try_list(deps, env, info, listings),
             Buy { limit } => try_buy(deps, info, limit),
             RedeemTicket { address, ticket_id } => try_redeem(deps, info, address, &ticket_id),
-            BaseMsg(base_msg) => Cw721SellableContract::default()
-                .execute(deps, env, info, base_msg)
-                .map_err(|x| x.into()),
+            BaseMsg(base_msg) => {
+                validate_locked_ticket(&deps, &base_msg)?;
+                Cw721SellableContract::default()
+                    .execute(deps, env, info, base_msg)
+                    .map_err(|x| x.into())
+            }
         }
     }
 }
@@ -148,13 +148,11 @@ mod tests {
     use crate::entry::{execute, instantiate, query};
     use crate::error::ContractError;
     use crate::test_utils::test_utils::{Context, ContractInfo};
-    use cosmwasm_std::{Addr, BankMsg, Coin, CosmosMsg};
+    use cosmwasm_std::{to_binary, Addr, BankMsg, Coin, CosmosMsg};
 
     use crate::msg::Cw721SellableQueryMsg;
     use crate::query::ListedTokensResponse;
     use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-    use cw2981_royalties::msg::Cw2981QueryMsg;
-    use cw2981_royalties::InstantiateMsg;
     use cw721::Cw721Query;
     use cw721::NftInfoResponse;
     use schemars::Map;
@@ -656,5 +654,66 @@ mod tests {
         // Make sure ticket id 1 and ticket id 2 exists
         contract.nft_info(deps.as_ref(), 1.to_string()).unwrap();
         contract.nft_info(deps.as_ref(), 2.to_string()).unwrap();
+    }
+
+    #[test]
+    fn validate_base_msg_locked_tickets() {
+        let mut context = Context::new(
+            ContractInfo {
+                name: "Ticketing".to_string(),
+                symbol: "TICK".to_string(),
+            },
+            CREATOR,
+            Some(&[]),
+        );
+
+        let locked_token_id = "Burnt_Locked#1";
+        let mint_msg = cw721_base::MintMsg {
+            token_id: locked_token_id.to_string(),
+            owner: OWNER.to_string(), // Create a ticket belonging to OWNER
+            token_uri: Some("https://starships.example.com/Starship/Enterprise.json".into()),
+            extension: Some(Metadata {
+                description: Some("Burnt event ticket #1".into()),
+                name: Some("Burnt_Locked#1".to_string()),
+                locked: true,
+                redeemed: false,
+                ..Metadata::default()
+            }),
+        };
+        let exec_msg = ExecuteMsg::BaseMsg(cw721_base::ExecuteMsg::Mint(mint_msg.clone()));
+        context
+            .execute(mock_info(CREATOR, &[]), exec_msg)
+            .expect("expected mint to work");
+
+        // Confirm transfer is not possible on locked ticket
+        let owner_info = mock_info(OWNER, &[]);
+        let transfer_msg = ExecuteMsg::BaseMsg(cw721_base::ExecuteMsg::TransferNft {
+            recipient: OWNER.to_string(),
+            token_id: locked_token_id.to_string(),
+        });
+        let res = context.execute(owner_info.clone(), transfer_msg).err();
+        match res {
+            Some(ContractError::TicketLocked) => assert!(true),
+            _ => {
+                println!("{:?}", res);
+                assert!(false)
+            }
+        };
+
+        // Make sure send is not possible on locked ticket
+        let owner_info = mock_info(OWNER, &[]);
+        let send_msg = ExecuteMsg::BaseMsg(cw721_base::ExecuteMsg::SendNft {
+            contract: String::from("CREATOR"),
+            token_id: locked_token_id.to_string(),
+            msg: to_binary(&vec![1, 2, 3]).unwrap(),
+        });
+        let res = context.execute(owner_info.clone(), send_msg).err();
+        match res {
+            Some(ContractError::TicketLocked) => assert!(true),
+            _ => {
+                println!("{:?}", res);
+                assert!(false)
+            }
+        };
     }
 }
