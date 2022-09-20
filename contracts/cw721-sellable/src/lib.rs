@@ -6,7 +6,7 @@ mod msg;
 mod query;
 mod test_utils;
 
-use crate::msg::Cw721SellableExecuteMsg;
+use crate::msg::{Cw721SellableExecuteMsg, InstantiateMsg};
 use cosmwasm_std::{Empty, Uint64};
 use cw2981_royalties::Trait;
 use cw721_base::Cw721Contract;
@@ -37,11 +37,26 @@ pub struct Metadata {
     pub redeemed: bool,
 }
 
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+pub struct Sponsor {
+    pub id: String,
+    pub name: String,
+}
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug, Default)]
+pub struct ContractMetadata {
+    pub description: String,
+    pub token_uri: Option<String>,
+    pub initial_price: Uint64,
+    pub royalty: Uint64,
+    pub num_of_tickets: Uint64,
+    pub sponsors: Vec<Sponsor>,
+}
+
 pub type Extension = Option<Metadata>;
 
 pub type MintExtension = Option<Extension>;
 
-pub type Cw721SellableContract<'a> = Cw721Contract<'a, Extension, Empty, Empty>;
+pub type Cw721SellableContract<'a> = Cw721Contract<'a, Extension, Empty, ContractMetadata>;
 
 pub type ExecuteMsg = Cw721SellableExecuteMsg<Extension>;
 
@@ -55,7 +70,6 @@ mod entry {
     use crate::query::listed_tokens;
     use cosmwasm_std::{entry_point, to_binary};
     use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
-    use cw2981_royalties::InstantiateMsg;
 
     #[entry_point]
     pub fn instantiate(
@@ -64,7 +78,37 @@ mod entry {
         info: MessageInfo,
         msg: InstantiateMsg,
     ) -> StdResult<Response> {
-        Cw721SellableContract::default().instantiate(deps, env, info, msg)
+        let contract = Cw721SellableContract::default();
+
+        let mut heap_deps = Box::new(deps);
+        contract.instantiate(
+            heap_deps.branch(),
+            env.clone(),
+            info.clone(),
+            msg.clone().into(),
+        )?;
+        contract
+            .contract_metadata
+            .save(heap_deps.storage, &msg.contract_metadata)?;
+
+        // Mint the number of tickets required
+        for n in 1..=msg.contract_metadata.num_of_tickets.into() {
+            let mint_msg = cw721_base::MintMsg {
+                token_id: n.to_string(),
+                owner: msg.minter.clone(),
+                token_uri: Some("https://starships.example.com/Starship/Enterprise.json".into()),
+                extension: Some(Metadata {
+                    description: Some(msg.contract_metadata.description.clone()),
+                    name: Some(msg.name.clone()),
+                    royalty_percentage: Some(msg.contract_metadata.royalty.clone().into()),
+                    ..Metadata::default()
+                }),
+            };
+            contract
+                .mint(heap_deps.branch(), env.clone(), info.clone(), mint_msg)
+                .unwrap();
+        }
+        Ok(Response::default())
     }
 
     #[entry_point]
@@ -111,8 +155,7 @@ mod tests {
 
     use crate::msg::Cw721SellableQueryMsg;
     use crate::query::ListedTokensResponse;
-    use cosmwasm_std::testing::mock_info;
-
+    use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
     use cw721::Cw721Query;
     use cw721::NftInfoResponse;
     use schemars::Map;
@@ -582,6 +625,38 @@ mod tests {
                 }
             }
         };
+    }
+
+    #[test]
+    fn validate_multiple_ticket_mint() {
+        use crate::msg::InstantiateMsg;
+
+        let mut deps = mock_dependencies();
+        let creator_info = mock_info(CREATOR, &[]);
+        let contract = Cw721SellableContract::default();
+
+        // Instantiate a new contract
+        let instantiate_msg = InstantiateMsg {
+            name: "Burnt Ticketing".to_string(),
+            symbol: "BRNT".to_string(),
+            minter: CREATOR.to_string(),
+            contract_metadata: ContractMetadata {
+                description: "Ticketing for the Burnt event".to_string(),
+                num_of_tickets: Uint64::from(2 as u64),
+                ..ContractMetadata::default()
+            },
+        };
+
+        instantiate(deps.as_mut(), mock_env(), creator_info, instantiate_msg)
+            .expect("Contract Instantiated");
+
+        // Make sure 2 tickets were created
+        let token_count = contract.token_count(deps.as_mut().storage).unwrap_or(0);
+        assert_eq!(token_count, 2);
+
+        // Make sure ticket id 1 and ticket id 2 exists
+        contract.nft_info(deps.as_ref(), 1.to_string()).unwrap();
+        contract.nft_info(deps.as_ref(), 2.to_string()).unwrap();
     }
 
     #[test]

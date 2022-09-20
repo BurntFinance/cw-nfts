@@ -2,8 +2,22 @@ use cosmwasm_std::Uint64;
 use schemars::{JsonSchema, Map};
 use serde::{Deserialize, Serialize};
 
-use crate::Extension;
+use crate::{ContractMetadata, Extension};
 use cw2981_royalties::msg::Cw2981QueryMsg;
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+pub struct InstantiateMsg {
+    /// Name of the NFT contract
+    pub name: String,
+    /// Symbol of the NFT contract
+    pub symbol: String,
+
+    /// The minter is the only one who can create new NFTs.
+    /// This is designed for a base NFT that is controlled by an external program
+    /// or contract. You will likely replace this with custom logic in custom NFTs
+    pub minter: String,
+    /// Contract wide metadata
+    pub contract_metadata: ContractMetadata,
+}
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -38,6 +52,19 @@ impl From<Cw721SellableExecuteMsg<Extension>> for BaseExecuteMsg {
         match msg {
             BaseMsg(msg) => msg,
             _ => panic!("cannot covert {:?} to Cw2981QueryMsg", msg),
+        }
+    }
+}
+
+type BaseInstantiateMsg = cw2981_royalties::InstantiateMsg;
+
+impl From<InstantiateMsg> for BaseInstantiateMsg {
+    fn from(msg: InstantiateMsg) -> BaseInstantiateMsg {
+        // remove contract wide metadata
+        BaseInstantiateMsg {
+            name: msg.name,
+            symbol: msg.symbol,
+            minter: msg.minter,
         }
     }
 }
