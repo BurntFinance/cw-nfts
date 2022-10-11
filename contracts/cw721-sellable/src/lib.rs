@@ -62,6 +62,8 @@ pub type ExecuteMsg = Cw721SellableExecuteMsg<Extension>;
 
 // #[cfg(not(feature = "library"))]
 mod entry {
+    use std::collections::{BTreeMap};
+
     use super::*;
 
     use crate::error::ContractError;
@@ -91,6 +93,8 @@ mod entry {
             .contract_metadata
             .save(heap_deps.storage, &msg.contract_metadata)?;
 
+        // Save a map of token ids to their list price
+        let mut tokens_to_list: BTreeMap<String, Uint64> = BTreeMap::new();
         // Mint the number of tickets required
         for n in 1..=msg.contract_metadata.num_of_tickets.into() {
             let mint_msg = cw721_base::MintMsg {
@@ -107,7 +111,12 @@ mod entry {
             contract
                 .mint(heap_deps.branch(), env.clone(), info.clone(), mint_msg)
                 .unwrap();
+            tokens_to_list.insert(n.to_string(), msg.contract_metadata.initial_price);
         }
+        // List all tokens
+        try_list(heap_deps.branch(), env, info, tokens_to_list).unwrap_or_else(|e| {
+           Response::default()
+        });
         Ok(Response::default())
     }
 
@@ -151,7 +160,7 @@ mod tests {
     use crate::entry::{execute, instantiate, query};
     use crate::error::ContractError;
     use crate::test_utils::test_utils::{Context, ContractInfo};
-    use cosmwasm_std::{to_binary, Addr, BankMsg, Coin, CosmosMsg};
+    use cosmwasm_std::{to_binary, Addr, BankMsg, Coin, CosmosMsg, from_binary};
 
     use crate::msg::Cw721SellableQueryMsg;
     use crate::query::ListedTokensResponse;
@@ -718,5 +727,35 @@ mod tests {
                 assert!(false)
             }
         };
+    }
+    #[test]
+    fn validate_list_after_mint() {
+        let mut deps = mock_dependencies();
+        let creator_info = mock_info(CREATOR, &[]);
+
+        // Instantiate a new contract
+        let instantiate_msg = InstantiateMsg {
+            name: "Burnt Ticketing".to_string(),
+            symbol: "BRNT".to_string(),
+            minter: CREATOR.to_string(),
+            contract_metadata: ContractMetadata {
+                description: "Ticketing for the Burnt event".to_string(),
+                num_of_tickets: Uint64::from(2 as u64),
+                initial_price: Uint64::from(20 as u64),
+                ..ContractMetadata::default()
+            },
+        };
+        // let msg: InstantiateMsg = serde_json::from_str(instantiate_msg).unwrap();
+        instantiate(deps.as_mut(), mock_env(), creator_info, instantiate_msg)
+            .expect("Contract Instantiated");
+
+        // Query saleable tokens
+        let query_msg = Cw721SellableQueryMsg::ListedTokens {
+            start_after: None,
+            limit: None,
+        };
+        let query_res: ListedTokensResponse = from_binary(&query(deps.as_ref(), mock_env(), query_msg.clone()).unwrap()).unwrap();
+        // Make sure all tickets were listed
+        assert_eq!(2, query_res.tokens.len());
     }
 }
