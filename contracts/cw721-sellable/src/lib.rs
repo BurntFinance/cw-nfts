@@ -234,8 +234,8 @@ mod tests {
 
     #[test]
     fn buy_token() {
-        let million_tokens = &[Coin::new(1_000_000, "burnt")];
-        let zero_tokens = &[Coin::new(0, "burnt")];
+        let million_tokens = &[Coin::new(1_000_000, "turnt")];
+        let zero_tokens = &[Coin::new(0, "turnt")];
         let balances: &[(&str, &[Coin])] = &[
             (CREATOR, million_tokens),
             (OWNER, million_tokens),
@@ -307,7 +307,7 @@ mod tests {
         match message {
             CosmosMsg::Bank(BankMsg::Send { to_address, amount })
                 if to_address.eq(OWNER)
-                    && amount == &Vec::from([Coin::new(30 as u128, "burnt")]) =>
+                    && amount == &Vec::from([Coin::new(30 as u128, "turnt")]) =>
             {
                 assert!(true)
             }
@@ -317,8 +317,8 @@ mod tests {
 
     #[test]
     fn lowest_listing_sells() {
-        let million_tokens = &[Coin::new(1_000_000, "burnt")];
-        let zero_tokens = &[Coin::new(0, "burnt")];
+        let million_tokens = &[Coin::new(1_000_000, "turnt")];
+        let zero_tokens = &[Coin::new(0, "turnt")];
         let balances: &[(&str, &[Coin])] = &[
             (CREATOR, million_tokens),
             (OWNER, million_tokens),
@@ -386,7 +386,7 @@ mod tests {
         let message = &response.messages.get(0).unwrap().msg;
         match message {
             CosmosMsg::Bank(BankMsg::Send { to_address, amount })
-                if to_address.eq(OWNER) && amount == &Vec::from([Coin::new(25, "burnt")]) =>
+                if to_address.eq(OWNER) && amount == &Vec::from([Coin::new(25, "turnt")]) =>
             {
                 assert!(true)
             }
