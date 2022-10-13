@@ -24,6 +24,9 @@ pub enum ContractError {
     #[error("Limit of {limit} below lowest offer of {lowest_price}")]
     LimitBelowLowestOffer { limit: Uint64, lowest_price: Uint64 },
 
+    #[error("No relevant funds present in transaction")]
+    NoFundsPresent,
+
     #[error("{0}")]
     BaseError(#[from] cw721_base::ContractError),
 }

@@ -13,6 +13,12 @@ use cw721_base::Cw721Contract;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+#[cfg(mainnet)]
+pub const DENOM_NAME: &str = "uburnt";
+
+#[cfg(not(mainnet))]
+pub const DENOM_NAME: &str = "uturnt";
+
 // see: https://docs.opensea.io/docs/metadata-standards
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug, Default)]
 pub struct Metadata {
@@ -142,7 +148,7 @@ mod entry {
         use Cw721SellableExecuteMsg::*;
         match msg {
             List { listings } => try_list(deps, env, info, listings),
-            Buy { limit } => try_buy(deps, info, limit),
+            Buy => try_buy(deps, info),
             RedeemTicket { address, ticket_id } => try_redeem(deps, info, address, &ticket_id),
             BaseMsg(base_msg) => {
                 validate_locked_ticket(&deps, &base_msg)?;
@@ -160,7 +166,7 @@ mod tests {
     use crate::entry::{execute, instantiate, query};
     use crate::error::ContractError;
     use crate::test_utils::test_utils::{Context, ContractInfo};
-    use cosmwasm_std::{to_binary, Addr, BankMsg, Coin, CosmosMsg, from_binary};
+    use cosmwasm_std::{to_binary, Addr, BankMsg, Coin, CosmosMsg, from_binary, MessageInfo};
 
     use crate::msg::Cw721SellableQueryMsg;
     use crate::query::ListedTokensResponse;
@@ -241,10 +247,14 @@ mod tests {
         assert_eq!(0, query_res.tokens.len());
     }
 
+    fn create_buy_info(sender: &str, limit: u128) -> MessageInfo {
+        mock_info(sender, &[Coin::new(limit, DENOM_NAME)])
+    }
+
     #[test]
     fn buy_token() {
-        let million_tokens = &[Coin::new(1_000_000, "uturnt")];
-        let zero_tokens = &[Coin::new(0, "uturnt")];
+        let million_tokens = &[Coin::new(1_000_000, DENOM_NAME)];
+        let zero_tokens = &[Coin::new(0, DENOM_NAME)];
         let balances: &[(&str, &[Coin])] = &[
             (CREATOR, million_tokens),
             (OWNER, million_tokens),
@@ -289,21 +299,19 @@ mod tests {
             .expect("expected list call to be successful");
 
         // Buy a token
-        let create_buy_msg = |limit: u64| Cw721SellableExecuteMsg::Buy {
-            limit: Uint64::new(limit),
-        };
-        let buyer_info = mock_info(BUYER, &[]);
+        let buyer_info_below_list = create_buy_info(BUYER, 20);
         let no_money_info = mock_info(NO_MONEY, &[]);
+        let buyer_info_at_list = create_buy_info(BUYER, 30);
         context
-            .execute(buyer_info.clone(), create_buy_msg(20))
+            .execute(buyer_info_below_list.clone(), Cw721SellableExecuteMsg::Buy {})
             .expect_err("expected buy below list price to fail");
 
         context
-            .execute(no_money_info.clone(), create_buy_msg(30))
+            .execute(no_money_info.clone(), Cw721SellableExecuteMsg::Buy {})
             .expect_err("expected buy from user without funds to fail");
 
         let response = context
-            .execute(buyer_info.clone(), create_buy_msg(30))
+            .execute(buyer_info_at_list.clone(), Cw721SellableExecuteMsg::Buy {})
             .expect("expected buy at list price to succeed");
 
         assert_eq!(
@@ -326,8 +334,8 @@ mod tests {
 
     #[test]
     fn lowest_listing_sells() {
-        let million_tokens = &[Coin::new(1_000_000, "uturnt")];
-        let zero_tokens = &[Coin::new(0, "uturnt")];
+        let million_tokens = &[Coin::new(1_000_000, DENOM_NAME)];
+        let zero_tokens = &[Coin::new(0, DENOM_NAME)];
         let balances: &[(&str, &[Coin])] = &[
             (CREATOR, million_tokens),
             (OWNER, million_tokens),
@@ -375,21 +383,19 @@ mod tests {
             .expect("expected list call to be successful");
 
         // Buy a token
-        let create_buy_msg = |limit: u64| Cw721SellableExecuteMsg::Buy {
-            limit: Uint64::new(limit),
-        };
-        let buyer_info = mock_info(BUYER, &[]);
+        let buyer_info_below_list = create_buy_info(BUYER, 20);
         let no_money_info = mock_info(NO_MONEY, &[]);
+        let buyer_info_at_list = create_buy_info(BUYER, 31);
         context
-            .execute(buyer_info.clone(), create_buy_msg(20))
+            .execute(buyer_info_below_list.clone(), Cw721SellableExecuteMsg::Buy {})
             .expect_err("expected buy below list price to fail");
 
         context
-            .execute(no_money_info.clone(), create_buy_msg(31))
+            .execute(no_money_info.clone(), Cw721SellableExecuteMsg::Buy {})
             .expect_err("expected buy from user without funds to fail");
 
         let response = context
-            .execute(buyer_info.clone(), create_buy_msg(31))
+            .execute(buyer_info_at_list.clone(), Cw721SellableExecuteMsg::Buy {})
             .expect("expected buy at list price to succeed");
 
         let message = &response.messages.get(0).unwrap().msg;
