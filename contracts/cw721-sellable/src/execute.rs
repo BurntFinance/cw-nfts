@@ -8,8 +8,15 @@ use cosmwasm_std::{
 };
 use schemars::Map;
 
+#[cfg(mainnet)]
+const DENOM_NAME: &str = "uburnt";
+
+#[cfg(not(mainnet))]
+const DENOM_NAME: &str = "uturnt";
+
+
 pub fn try_buy(deps: DepsMut, info: MessageInfo, limit: Uint64) -> Result<Response, ContractError> {
-    let coin = deps.querier.query_balance(&info.sender, "uturnt")?;
+    let coin = deps.querier.query_balance(&info.sender, DENOM_NAME)?;
     if coin.amount < limit.into() {
         return Err(ContractError::Unauthorized);
     }
