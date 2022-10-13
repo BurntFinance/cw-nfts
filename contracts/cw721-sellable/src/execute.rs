@@ -9,7 +9,7 @@ use cosmwasm_std::{
 use schemars::Map;
 
 pub fn try_buy(deps: DepsMut, info: MessageInfo, limit: Uint64) -> Result<Response, ContractError> {
-    let coin = deps.querier.query_balance(&info.sender, "turnt")?;
+    let coin = deps.querier.query_balance(&info.sender, "uturnt")?;
     if coin.amount < limit.into() {
         return Err(ContractError::Unauthorized);
     }
@@ -63,14 +63,10 @@ pub fn try_buy(deps: DepsMut, info: MessageInfo, limit: Uint64) -> Result<Respon
                 },
             )?;
 
-            let payment_coin = Coin::new(lowest_price.u64() as u128, "turnt");
+            let payment_coin = Coin::new(lowest_price.u64() as u128, "uturnt");
 
             Ok(Response::new()
-                .add_attribute("method", "buy")
-                .add_message(BankMsg::Send {
-                    to_address: lowest_token_owner.to_string(),
-                    amount: Vec::from([payment_coin]),
-                }))
+                .add_attribute("method", "buy"))
         })
 }
 

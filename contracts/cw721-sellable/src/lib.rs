@@ -243,8 +243,8 @@ mod tests {
 
     #[test]
     fn buy_token() {
-        let million_tokens = &[Coin::new(1_000_000, "turnt")];
-        let zero_tokens = &[Coin::new(0, "turnt")];
+        let million_tokens = &[Coin::new(1_000_000, "uturnt")];
+        let zero_tokens = &[Coin::new(0, "uturnt")];
         let balances: &[(&str, &[Coin])] = &[
             (CREATOR, million_tokens),
             (OWNER, million_tokens),
@@ -316,7 +316,7 @@ mod tests {
         match message {
             CosmosMsg::Bank(BankMsg::Send { to_address, amount })
                 if to_address.eq(OWNER)
-                    && amount == &Vec::from([Coin::new(30 as u128, "turnt")]) =>
+                    && amount == &Vec::from([Coin::new(30 as u128, "uturnt")]) =>
             {
                 assert!(true)
             }
@@ -326,8 +326,8 @@ mod tests {
 
     #[test]
     fn lowest_listing_sells() {
-        let million_tokens = &[Coin::new(1_000_000, "turnt")];
-        let zero_tokens = &[Coin::new(0, "turnt")];
+        let million_tokens = &[Coin::new(1_000_000, "uturnt")];
+        let zero_tokens = &[Coin::new(0, "uturnt")];
         let balances: &[(&str, &[Coin])] = &[
             (CREATOR, million_tokens),
             (OWNER, million_tokens),
@@ -343,7 +343,7 @@ mod tests {
             Some(balances),
         );
         // Mint tokens
-        let token_ids = ["Enterprise", "Voyager"];
+        let token_ids = ["Bullock","Enterprise"];
         for token_id in token_ids {
             let mint_msg = cw721_base::MintMsg {
                 token_id: token_id.to_string(),
@@ -366,8 +366,8 @@ mod tests {
         let owner_info = mock_info(OWNER, &[]);
         let list_msg = Cw721SellableExecuteMsg::List {
             listings: Map::from([
-                ("Voyager".to_string(), Uint64::from(30 as u64)),
-                ("Enterprise".to_string(), Uint64::from(25 as u64)),
+                ("Enterprise".to_string(), Uint64::from(31 as u64)),
+                ("Bullock".to_string(), Uint64::from(30 as u64)),
             ]),
         };
         context
@@ -385,17 +385,17 @@ mod tests {
             .expect_err("expected buy below list price to fail");
 
         context
-            .execute(no_money_info.clone(), create_buy_msg(30))
+            .execute(no_money_info.clone(), create_buy_msg(31))
             .expect_err("expected buy from user without funds to fail");
 
         let response = context
-            .execute(buyer_info.clone(), create_buy_msg(30))
+            .execute(buyer_info.clone(), create_buy_msg(31))
             .expect("expected buy at list price to succeed");
 
         let message = &response.messages.get(0).unwrap().msg;
         match message {
             CosmosMsg::Bank(BankMsg::Send { to_address, amount })
-                if to_address.eq(OWNER) && amount == &Vec::from([Coin::new(25, "turnt")]) =>
+                if to_address.eq(OWNER) && amount == &Vec::from([Coin::new(30, "uturnt")]) =>
             {
                 assert!(true)
             }
@@ -405,7 +405,7 @@ mod tests {
         let enterprise_info = context
             .contract
             .tokens
-            .load(&context.deps.storage, "Enterprise")
+            .load(&context.deps.storage, "Bullock")
             .expect("expected token to exist");
 
         assert_eq!(enterprise_info.owner, Addr::unchecked(BUYER));
