@@ -63,13 +63,14 @@ pub fn try_buy(deps: DepsMut, info: MessageInfo) -> Result<Response, ContractErr
 
                 let payment_coin = Coin::new(lowest_price.u64() as u128, DENOM_NAME);
                 let delta = limit - lowest_price;
-                let mut messages = vec![
-                    BankMsg::Send { to_address: lowest_token_owner.to_string(), amount: vec![payment_coin] }
-                ];
+                let mut messages = vec![BankMsg::Send {
+                    to_address: lowest_token_owner.to_string(),
+                    amount: vec![payment_coin],
+                }];
                 if delta.u64() > 0 {
                     messages.push(BankMsg::Send {
                         to_address: info.sender.to_string(),
-                        amount: vec![Coin::new(delta.u64() as u128, DENOM_NAME)]
+                        amount: vec![Coin::new(delta.u64() as u128, DENOM_NAME)],
                     })
                 }
 

@@ -48,6 +48,7 @@ pub struct Sponsor {
     pub id: String,
     pub name: String,
 }
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug, Default)]
 pub struct ContractMetadata {
     pub description: String,
@@ -68,7 +69,7 @@ pub type ExecuteMsg = Cw721SellableExecuteMsg<Extension>;
 
 // #[cfg(not(feature = "library"))]
 mod entry {
-    use std::collections::{BTreeMap};
+    use std::collections::BTreeMap;
 
     use super::*;
 
@@ -120,9 +121,8 @@ mod entry {
             tokens_to_list.insert(n.to_string(), msg.contract_metadata.initial_price);
         }
         // List all tokens
-        try_list(heap_deps.branch(), env, info, tokens_to_list).unwrap_or_else(|e| {
-           Response::default()
-        });
+        try_list(heap_deps.branch(), env, info, tokens_to_list)
+            .unwrap_or_else(|e| Response::default());
         Ok(Response::default())
     }
 
@@ -166,7 +166,7 @@ mod tests {
     use crate::entry::{execute, instantiate, query};
     use crate::error::ContractError;
     use crate::test_utils::test_utils::{Context, ContractInfo};
-    use cosmwasm_std::{to_binary, Addr, BankMsg, Coin, CosmosMsg, from_binary, MessageInfo};
+    use cosmwasm_std::{from_binary, to_binary, Addr, BankMsg, Coin, CosmosMsg, MessageInfo};
 
     use crate::msg::Cw721SellableQueryMsg;
     use crate::query::ListedTokensResponse;
@@ -303,7 +303,10 @@ mod tests {
         let no_money_info = mock_info(NO_MONEY, &[]);
         let buyer_info_at_list = create_buy_info(BUYER, 30);
         context
-            .execute(buyer_info_below_list.clone(), Cw721SellableExecuteMsg::Buy {})
+            .execute(
+                buyer_info_below_list.clone(),
+                Cw721SellableExecuteMsg::Buy {},
+            )
             .expect_err("expected buy below list price to fail");
 
         context
@@ -351,7 +354,7 @@ mod tests {
             Some(balances),
         );
         // Mint tokens
-        let token_ids = ["Bullock","Enterprise"];
+        let token_ids = ["Bullock", "Enterprise"];
         for token_id in token_ids {
             let mint_msg = cw721_base::MintMsg {
                 token_id: token_id.to_string(),
@@ -387,7 +390,10 @@ mod tests {
         let no_money_info = mock_info(NO_MONEY, &[]);
         let buyer_info_at_list = create_buy_info(BUYER, 31);
         context
-            .execute(buyer_info_below_list.clone(), Cw721SellableExecuteMsg::Buy {})
+            .execute(
+                buyer_info_below_list.clone(),
+                Cw721SellableExecuteMsg::Buy {},
+            )
             .expect_err("expected buy below list price to fail");
 
         context
@@ -416,6 +422,7 @@ mod tests {
 
         assert_eq!(enterprise_info.owner, Addr::unchecked(BUYER));
     }
+
     #[test]
     fn redeem_ticket() {
         let mut context = Context::new(
@@ -734,6 +741,7 @@ mod tests {
             }
         };
     }
+
     #[test]
     fn validate_list_after_mint() {
         let mut deps = mock_dependencies();
@@ -760,7 +768,8 @@ mod tests {
             start_after: None,
             limit: None,
         };
-        let query_res: ListedTokensResponse = from_binary(&query(deps.as_ref(), mock_env(), query_msg.clone()).unwrap()).unwrap();
+        let query_res: ListedTokensResponse =
+            from_binary(&query(deps.as_ref(), mock_env(), query_msg.clone()).unwrap()).unwrap();
         // Make sure all tickets were listed
         assert_eq!(2, query_res.tokens.len());
     }
