@@ -122,7 +122,7 @@ mod entry {
         }
         // List all tokens
         try_list(heap_deps.branch(), env, info, tokens_to_list)
-            .unwrap_or_else(|e| Response::default());
+            .unwrap_or_else(|_e| Response::default());
         Ok(Response::default())
     }
 
@@ -148,7 +148,7 @@ mod entry {
         use Cw721SellableExecuteMsg::*;
         match msg {
             List { listings } => try_list(deps, env, info, listings),
-            Buy => try_buy(deps, info),
+            Buy {} => try_buy(deps, info),
             RedeemTicket { address, ticket_id } => try_redeem(deps, info, address, &ticket_id),
             BaseMsg(base_msg) => {
                 validate_locked_ticket(&deps, &base_msg)?;

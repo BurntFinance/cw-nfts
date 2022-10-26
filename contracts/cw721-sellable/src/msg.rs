@@ -33,7 +33,7 @@ pub enum Cw721SellableExecuteMsg<T> {
 
     /// Purchases the cheapest listed NFT. The value passed along with the
     /// transaction will act as the upper bound for the purchase price.
-    Buy,
+    Buy {},
 
     /// Mark ticket has redeemed
     RedeemTicket {
