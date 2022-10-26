@@ -31,10 +31,9 @@ pub enum Cw721SellableExecuteMsg<T> {
         listings: Map<String, Uint64>,
     },
 
-    /// Purchases the cheapest listed NFT, below or at the limit
-    Buy {
-        limit: Uint64,
-    },
+    /// Purchases the cheapest listed NFT. The value passed along with the
+    /// transaction will act as the upper bound for the purchase price.
+    Buy {},
 
     /// Mark ticket has redeemed
     RedeemTicket {

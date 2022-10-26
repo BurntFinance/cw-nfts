@@ -1,6 +1,6 @@
 use crate::error::ContractError;
-use crate::error::ContractError::{LimitBelowLowestOffer, NoListedTokensError};
-use crate::{Cw721SellableContract, Extension};
+use crate::error::ContractError::{LimitBelowLowestOffer, NoFundsPresent, NoListedTokensError};
+use crate::{Cw721SellableContract, Extension, DENOM_NAME};
 use cw721_base::ExecuteMsg;
 
 use cosmwasm_std::{
@@ -8,70 +8,79 @@ use cosmwasm_std::{
 };
 use schemars::Map;
 
-pub fn try_buy(deps: DepsMut, info: MessageInfo, limit: Uint64) -> Result<Response, ContractError> {
-    let coin = deps.querier.query_balance(&info.sender, "burnt")?;
-    if coin.amount < limit.into() {
-        return Err(ContractError::Unauthorized);
-    }
+pub fn try_buy(deps: DepsMut, info: MessageInfo) -> Result<Response, ContractError> {
+    let maybe_coin = info.funds.iter().find(|&coin| coin.denom.eq(DENOM_NAME));
 
-    let contract = Cw721SellableContract::default();
+    if let Some(coin) = maybe_coin {
+        let limit = (coin.amount.u128() as u64).into();
+        let contract = Cw721SellableContract::default();
 
-    // todo: there might be a better way to do this than a scan
-    let mut lowest: Result<(String, Addr, Uint64), ContractError> = Err(NoListedTokensError);
-    for (id, info) in contract
-        .tokens
-        .range(deps.storage, None, None, Order::Ascending)
-        .flatten()
-    {
-        let opt_price = info.extension.as_ref().and_then(|meta| meta.list_price);
-        let metadata = info.extension.ok_or(ContractError::NoMetadataPresent)?;
-        if !metadata.redeemed {
-            if let Some(list_price) = opt_price {
-                if let Ok((_, _, lowest_price)) = lowest {
-                    if list_price < lowest_price {
+        let mut lowest: Result<(String, Addr, Uint64), ContractError> = Err(NoListedTokensError);
+        for (id, info) in contract
+            .tokens
+            .range(deps.storage, None, None, Order::Ascending)
+            .flatten()
+        {
+            let opt_price = info.extension.as_ref().and_then(|meta| meta.list_price);
+            let metadata = info.extension.ok_or(ContractError::NoMetadataPresent)?;
+            if !metadata.redeemed {
+                if let Some(list_price) = opt_price {
+                    if let Ok((_, _, lowest_price)) = lowest {
+                        if list_price < lowest_price {
+                            lowest = Ok((id, info.owner, list_price))
+                        }
+                    } else {
                         lowest = Ok((id, info.owner, list_price))
                     }
-                } else {
-                    lowest = Ok((id, info.owner, list_price))
                 }
             }
         }
-    }
 
-    lowest
-        .and_then(|l @ (_, _, lowest_price)| {
-            if lowest_price <= limit {
-                Ok(l)
-            } else {
-                Err(LimitBelowLowestOffer {
-                    limit,
-                    lowest_price,
-                })
-            }
-        })
-        .and_then(|(lowest_token_id, lowest_token_owner, lowest_price)| {
-            contract.tokens.update::<_, ContractError>(
-                deps.storage,
-                lowest_token_id.as_str(),
-                |old| {
-                    let mut token_info = old.unwrap();
-                    let mut meta = token_info.extension.unwrap();
-                    meta.list_price = None;
-                    token_info.extension = Some(meta);
-                    token_info.owner = info.sender.clone();
-                    Ok(token_info)
-                },
-            )?;
+        lowest
+            .and_then(|l @ (_, _, lowest_price)| {
+                if lowest_price <= limit {
+                    Ok(l)
+                } else {
+                    Err(LimitBelowLowestOffer {
+                        limit,
+                        lowest_price,
+                    })
+                }
+            })
+            .and_then(|(lowest_token_id, lowest_token_owner, lowest_price)| {
+                contract.tokens.update::<_, ContractError>(
+                    deps.storage,
+                    lowest_token_id.as_str(),
+                    |old| {
+                        let mut token_info = old.unwrap();
+                        let mut meta = token_info.extension.unwrap();
+                        meta.list_price = None;
+                        token_info.extension = Some(meta);
+                        token_info.owner = info.sender.clone();
+                        Ok(token_info)
+                    },
+                )?;
 
-            let payment_coin = Coin::new(lowest_price.u64() as u128, "burnt");
-
-            Ok(Response::new()
-                .add_attribute("method", "buy")
-                .add_message(BankMsg::Send {
+                let payment_coin = Coin::new(lowest_price.u64() as u128, DENOM_NAME);
+                let delta = limit - lowest_price;
+                let mut messages = vec![BankMsg::Send {
                     to_address: lowest_token_owner.to_string(),
-                    amount: Vec::from([payment_coin]),
-                }))
-        })
+                    amount: vec![payment_coin],
+                }];
+                if delta.u64() > 0 {
+                    messages.push(BankMsg::Send {
+                        to_address: info.sender.to_string(),
+                        amount: vec![Coin::new(delta.u64() as u128, DENOM_NAME)],
+                    })
+                }
+
+                Ok(Response::new()
+                    .add_attribute("method", "buy")
+                    .add_messages(messages))
+            })
+    } else {
+        return Err(NoFundsPresent);
+    }
 }
 
 pub fn try_list(
@@ -194,10 +203,10 @@ pub fn check_can_send(
 fn get_ticket_id(msg: &ExecuteMsg<Extension>) -> Option<String> {
     // get token id from msg
     return match msg {
-        cw721_base::ExecuteMsg::TransferNft { token_id, .. } => Some(token_id.to_string()),
-        cw721_base::ExecuteMsg::SendNft { token_id, .. } => Some(token_id.to_string()),
-        cw721_base::ExecuteMsg::Approve { token_id, .. } => Some(token_id.to_string()),
-        cw721_base::ExecuteMsg::Revoke { token_id, .. } => Some(token_id.to_string()),
+        ExecuteMsg::TransferNft { token_id, .. } => Some(token_id.to_string()),
+        ExecuteMsg::SendNft { token_id, .. } => Some(token_id.to_string()),
+        ExecuteMsg::Approve { token_id, .. } => Some(token_id.to_string()),
+        ExecuteMsg::Revoke { token_id, .. } => Some(token_id.to_string()),
         _ => None,
     };
 }
