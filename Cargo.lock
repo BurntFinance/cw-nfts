@@ -298,7 +298,6 @@ dependencies = [
  "cw721-base",
  "schemars",
  "serde",
- "serde_json",
  "thiserror",
 ]
 

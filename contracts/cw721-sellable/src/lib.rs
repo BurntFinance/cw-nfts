@@ -759,7 +759,6 @@ mod tests {
                 ..ContractMetadata::default()
             },
         };
-        // let msg: InstantiateMsg = serde_json::from_str(instantiate_msg).unwrap();
         instantiate(deps.as_mut(), mock_env(), creator_info, instantiate_msg)
             .expect("Contract Instantiated");
 
